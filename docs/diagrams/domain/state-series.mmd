@@ -1,0 +1,42 @@
+%% ============================================================
+%% Máquina de Estados: Series
+%% Referência: docs/blueprint/09-state-models.md
+%% ============================================================
+
+stateDiagram-v2
+    direction TB
+
+    [*] --> planning
+
+    %% Estados
+    planning : Série criada<br/>Aguardando produção
+    in_progress : Vídeos sendo<br/>produzidos
+    completed : Todos episódios<br/>publicados
+    cancelled : Série cancelada
+
+    %% Transições
+    planning --> in_progress : Primeiro vídeo
+    in_progress --> completed : Episódio final
+    in_progress --> cancelled : Cancelar
+    planning --> cancelled : Cancelar
+
+    %% Estados terminais
+    completed --> [*]
+    cancelled --> [*]
+
+    %% Notas
+    note right of planning
+        Título definido<br/>episode_count definido
+    end note
+
+    note right of in_progress
+        Episodes adicionados<br/>progress tracking
+    end note
+
+    note right of completed
+        Estado terminal<br/>Série finalizada
+    end note
+
+    note right of cancelled
+        Estado terminal<br/>Não produz mais
+    end note

@@ -12,69 +12,175 @@ Este documento cataloga todas as entidades com ciclo de vida, seus estados poss�
 
 > Quais entidades mudam de estado? Pedidos, pagamentos, assinaturas, tarefas?
 
-Repita a estrutura abaixo para cada entidade que possui ciclo de vida.
-
 ---
 
-### {{Nome da Entidade}}
+### Pipeline
 
-**Descrição:** {{Breve descrição da entidade e por que ela possui estados.}}
+**Descrição:** Representa uma execução completa do pipeline de geração de vídeo, desde a inicialização até a publicação ou falha.
 
 #### Estados Possíveis
 
 | Estado | Descrição |
 |--------|-----------|
-| {{estado_1}} | {{Descrição do estado}} |
-| {{estado_2}} | {{Descrição do estado}} |
-| {{estado_3}} | {{Descrição do estado}} |
+| pending | Pipeline criado, aguardando início da execução |
+| running | Pipeline em execução, steps sendo processados |
+| paused | Pipeline pausado (para retry manual) |
+| completed | Pipeline executado com sucesso, vídeo publicado |
+| failed | Pipeline falhou em algum step |
 
 #### Transições
 
 | De | Para | Gatilho | Condição |
 |----|------|---------|----------|
-| {{estado_1}} | {{estado_2}} | {{Ação ou evento que provoca a mudança}} | {{Regra que precisa ser verdadeira}} |
-| {{estado_2}} | {{estado_3}} | {{Ação ou evento que provoca a mudança}} | {{Regra que precisa ser verdadeira}} |
+| pending | running | Operador inicia pipeline | Nicho configurado |
+| running | running | Step completo | Próximo step executado |
+| running | paused | Operador pausa | Retry manual necessário |
+| paused | running | Operador resume | Problema resolvido |
+| running | completed | Upload YouTube bem-sucedido | Vídeo publicado |
+| running | failed | Step falha após 3 tentativas | Erro irrecuperável |
+| paused | failed | Operador cancela | Cancelamento explícito |
+| failed | pending | Operador reinicia | Novo pipeline |
 
-> Existe alguma transição que deveria ser irreversível? Algum estado terminal do qual não se pode sair?
+#### Transições Proibidas
+
+- pending → completed (deve passar por running)
+- failed → completed (não é possível completar um pipeline que falhou)
+- completed → * (estado terminal)
 
 #### Diagrama
 
-> 📐 Diagrama template: [state-template.mmd](../diagrams/domain/state-template.mmd)
+> 📐 Diagrama: [state-pipeline.mmd](../diagrams/domain/state-pipeline.mmd)
 
 ---
 
-## Exemplo: Ciclo de Vida de um Pedido
+### Series
 
-### Pedido (Order)
-
-**Descrição:** Representa uma solicitação de compra feita pelo cliente, desde a criação até a conclusão ou cancelamento.
+**Descrição:** Representa uma série temática de vídeos (ex: "10 Mistérios Não Resolvidos"), com acompanhamento de progresso.
 
 #### Estados Possíveis
 
 | Estado | Descrição |
 |--------|-----------|
-| Rascunho | Pedido criado mas ainda não confirmado pelo cliente. |
-| Confirmado | Cliente finalizou o pedido e aguarda pagamento. |
-| Pago | Pagamento aprovado com sucesso. |
-| Em Separação | Itens sendo preparados para envio. |
-| Enviado | Pedido despachado para a transportadora. |
-| Entregue | Cliente recebeu o pedido. Estado terminal. |
-| Cancelado | Pedido cancelado antes do envio. Estado terminal. |
+| planning | Série criada, aguardando início da produção |
+| in_progress | Vídeos sendo produzidos |
+| completed | Todos os episódios publicados |
+| cancelled | Série cancelada |
 
 #### Transições
 
 | De | Para | Gatilho | Condição |
 |----|------|---------|----------|
-| Rascunho | Confirmado | Cliente clica em "Finalizar Pedido" | Carrinho possui ao menos 1 item |
-| Confirmado | Pago | Gateway de pagamento retorna aprovação | Pagamento aprovado |
-| Confirmado | Cancelado | Cliente solicita cancelamento | Pedido ainda não foi pago |
-| Pago | Em Separação | Equipe de estoque inicia preparação | Todos os itens disponíveis |
-| Em Separação | Enviado | Código de rastreio gerado | Pacote entregue à transportadora |
-| Enviado | Entregue | Transportadora confirma entrega | Confirmação de recebimento |
-| Pago | Cancelado | Cliente solicita cancelamento com reembolso | Política de cancelamento permite |
+| planning | in_progress | Primeiro vídeo publicado | Pelo menos 1 vídeo |
+| in_progress | completed | Último episódio publicado | episode_count atingido |
+| in_progress | cancelled | Operador cancela | Cancelamento explícito |
+| planning | cancelled | Operador cancela | Cancelamento explícito |
+
+#### Transições Proibidas
+
+- completed → * (estado terminal)
+- cancelled → * (estado terminal)
+- planning → completed (deve produzir episódios)
 
 #### Diagrama
 
-> 📐 Duplique o template para cada entidade com ciclo de vida. Veja: [domain/](../diagrams/domain/)
+> 📐 Diagrama: [state-series.mmd](../diagrams/domain/state-series.mmd)
+
+---
+
+### LearningState
+
+**Descrição:** Representa o estado do Learning Engine para um nicho específico, indicando se o aprendizado está ativo.
+
+#### Estados Possíveis
+
+| Estado | Descrição |
+|--------|-----------|
+| inactive | Learning não ativo (cold start) |
+| active | Learning ativo, ajustando pesos |
+| paused | Learning pausado (por instabilidade) |
+
+#### Transições
+
+| De | Para | Gatilho | Condição |
+|----|------|---------|----------|
+| inactive | active | Mínimo 5 vídeos analisados | Dados suficientes |
+| active | inactive | Operador desativa | Configuração explícita |
+| active | paused | Instabilidade detectada | Convergência instável |
+| paused | active | Operador reativa | Verificação manual |
+
+#### Transições Proibidas
+
+- inactive → paused (não pode pausar algo inativo)
+
+#### Diagrama
+
+> 📐 Diagrama: [state-learning.mmd](../diagrams/domain/state-learning.mmd)
+
+---
+
+### VideoMetrics
+
+**Descrição:** Representa as métricas de um vídeo coletadas do YouTube Analytics.
+
+#### Estados Possíveis
+
+| Estado | Descrição |
+|--------|-----------|
+| pending | Métricas solicitadas, aguardando API |
+| collected | Métricas obtidas com sucesso |
+| failed | Falha ao coletar métricas |
+
+#### Transições
+
+| De | Para | Gatilho | Condição |
+|----|------|---------|----------|
+| pending | collected | API retorna dados | Sucesso na chamada |
+| pending | failed | API retorna erro | Falha na chamada |
+| failed | pending | Retry agendado | Tentativa de retry |
+
+#### Transições Proibidas
+
+- collected → * (estado terminal)
+
+#### Diagrama
+
+> 📐 Diagrama: [state-video-metrics.mmd](../diagrams/domain/state-video-metrics.mmd)
+
+---
+
+### Scene
+
+**Descrição:** Menor unidade do vídeo, processada individualmente.
+
+#### Estados Possíveis
+
+| Estado | Descrição |
+|--------|-----------|
+| pending | Scene criada, aguardando processamento |
+| audio_generating | Áudio sendo gerado (TTS) |
+| audio_ready | Áudio gerado |
+| visual_ready | Visual disponível |
+| rendered | Scene renderizada |
+| failed | Falha no processamento |
+
+#### Transições
+
+| De | Para | Gatilho | Condição |
+|----|------|---------|----------|
+| pending | audio_generating | Iniciar geração de áudio | - |
+| audio_generating | audio_ready | Áudio retornado | Sucesso |
+| audio_ready | visual_ready | Visual baixado | Sucesso |
+| visual_ready | rendered | FFmpeg processa | Sucesso |
+| audio_generating | failed | ElevenLabs falha | Após 3 retries |
+| visual_ready | failed | FFmpeg falha | Após 3 retries |
+
+#### Transições Proibidas
+
+- rendered → * (estado terminal)
+- failed → * (precisa de retry manual)
+
+#### Diagrama
+
+> 📐 Diagrama: [state-scene.mmd](../diagrams/domain/state-scene.mmd)
 
 <!-- APPEND:state-models -->

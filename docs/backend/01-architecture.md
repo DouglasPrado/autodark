@@ -2,98 +2,96 @@
 
 Define as camadas arquiteturais, regras de dependencia, fronteiras de dominio e estrategia de deploy.
 
-> **Implementa:** [docs/blueprint/06-system-architecture.md](../blueprint/06-system-architecture.md) (componentes e deploy) e [docs/blueprint/10-architecture_decisions.md](../blueprint/10-architecture_decisions.md) (ADRs).
-> **Complementa:** [docs/frontend/01-architecture.md](../frontend/01-architecture.md) (camadas do frontend).
+> **Implementa:** [docs/blueprint/06-system-architecture.md](../blueprint/06-system-architecture.md) (componentes e deploy)
+> **Nota:** Este e um projeto CLI, nao API REST.
 
 ---
 
-## Camadas Arquiteturais
-
-> Como o backend e organizado internamente? Quais sao as camadas e como se comunicam?
+## Arquitetura Funcioal (Pipeline-Based)
 
 ```
 ┌─────────────────────────────────────────┐
-│           Presentation Layer            │
-│   (Controllers, Routes, Middlewares)    │
+│              CLI Layer                  │
+│    mestra generate, status, videos       │
 ├─────────────────────────────────────────┤
-│           Application Layer             │
-│     (Services, DTOs, Validators)        │
+│         Pipeline Orchestrator            │
+│   execute(), executeStep(), retry()     │
 ├─────────────────────────────────────────┤
-│             Domain Layer                │
-│  (Entities, Value Objects, Events)      │
+│              Engines Layer              │
+│  Content | Scene | Voice | Visual       │
+│  Pacing | Render | Thumbnail           │
+│  Performance | Strategy | Learning       │
 ├─────────────────────────────────────────┤
-│         Infrastructure Layer            │
-│ (Repositories, Cache, Queue, External)  │
+│           Infrastructure Layer         │
+│  PrismaClient | FileSystem | HTTP      │
 └─────────────────────────────────────────┘
 ```
 
 | Camada | Contem | Regra de Dependencia |
 | --- | --- | --- |
-| {{Presentation}} | {{Controllers, routes, middlewares, serializers}} | {{So depende de Application}} |
-| {{Application}} | {{Services, DTOs, validators, use cases}} | {{So depende de Domain}} |
-| {{Domain}} | {{Entities, value objects, domain events, domain errors}} | {{Nao depende de nenhuma outra camada}} |
-| {{Infrastructure}} | {{Repositories, cache, messaging, external clients, ORM}} | {{Implementa interfaces do Domain}} |
+| CLI | Commander commands | Depende de PipelineOrchestrator |
+| PipelineOrchestrator | execute, retry, persist | Depende de Engines |
+| Engines | Logica de negocio | Dependem de Infrastructure |
+| Infrastructure | DB, Files, APIs | Implementa interfaces |
 
 <!-- APPEND:camadas -->
 
 ---
 
-## Regras de Dependencia
+## Pipeline Orchestrator
 
-> Quais regras garantem o isolamento entre camadas?
+> **Fonte:** [docs/blueprint/06-system-architecture.md](../blueprint/06-system-architecture.md)
 
-- {{A camada Domain NUNCA importa de Infrastructure ou Presentation}}
-- {{Controllers NUNCA acessam repositories diretamente — sempre via Service}}
-- {{Services NUNCA retornam entidades de ORM — sempre mapeiam para DTOs ou Domain entities}}
-- {{Toda dependencia externa (banco, cache, API) e acessada via interface definida em Domain}}
+O核 do sistema:
+
+```typescript
+interface PipelineOrchestrator {
+  execute(niche: string): Promise<PipelineContext>
+  executeStep(step: string, context: PipelineContext): Promise<PipelineContext>
+  retry(step: string, context: PipelineContext, attempt: number): Promise<PipelineContext>
+  persistState(context: PipelineContext): Promise<void>
+}
+```
+
+**Responsabilidades:**
+- Coordenar steps sequenciais
+- Gerenciar retry com backoff
+- Persistir estado apos cada step
+- Emitir logs estruturados
 
 ---
 
-## Fronteiras de Dominio
+## Engines (Modulos de Negocio)
 
-> Como o backend e dividido em modulos/dominios? Cada modulo encapsula uma area de negocio.
+> **Fonte:** [docs/blueprint/06-system-architecture.md](../blueprint/06-system-architecture.md)
 
-| Modulo/Dominio | Responsabilidade | Entidades Principais | Depende de |
+| Engine | Responsabilidade | Input | Output |
 | --- | --- | --- | --- |
-| {{Ex: Users}} | {{Registro, autenticacao, perfil}} | {{User, Session}} | {{—}} |
-| {{Ex: Orders}} | {{Criacao, pagamento, tracking}} | {{Order, OrderItem}} | {{Users, Products}} |
-| {{Ex: Products}} | {{Catalogo, estoque, precos}} | {{Product, Category}} | {{—}} |
-| {{Ex: Notifications}} | {{Email, SMS, push}} | {{Notification, Template}} | {{Users}} |
-
-<!-- APPEND:dominios -->
-
----
-
-## Comunicacao entre Modulos
-
-> Como os modulos se comunicam? Chamada direta, eventos, ou ambos?
-
-| De | Para | Tipo | Mecanismo | Exemplo |
-| --- | --- | --- | --- | --- |
-| {{Orders}} | {{Users}} | {{Sincrono}} | {{Chamada de Service}} | {{OrderService chama UserService.findById()}} |
-| {{Orders}} | {{Notifications}} | {{Assincrono}} | {{Evento via fila}} | {{OrderPaid → envia email de confirmacao}} |
-| {{Payments}} | {{Orders}} | {{Assincrono}} | {{Evento via fila}} | {{PaymentConfirmed → atualiza status do pedido}} |
-
-<!-- APPEND:comunicacao -->
+| Content | Gerar ideias e roteiros | niche, directive | Idea, Script |
+| Scene | Segmentar em cenas | Script | Scene[] |
+| Voice | Gerar audio TTS | Scene[] | AudioSegment[] |
+| Visual | Buscar clips | Scene[] | Clip[] |
+| Pacing | Controlar ritmo | Scene[] | Scene[] (com pacing) |
+| Render | Renderizar video | Scene[] | videoPath |
+| Thumbnail | Gerar thumbnail | Idea | Thumbnail |
+| Upload | Publicar YouTube | video, thumbnail | videoId |
+| Performance | Coletar metricas | videoId | VideoMetrics |
+| Strategy | Gerar plano | metrics | ContentPlan |
+| Learning | Ajustar pesos | VideoMetrics[] | LearningState |
 
 ---
 
 ## Estrategia de Deploy
 
-> Como o backend e implantado em cada ambiente?
-
-| Ambiente | Infraestrutura | Deploy | URL |
+| Ambiente | Infraestrutura | Deploy | Command |
 | --- | --- | --- | --- |
-| {{Development}} | {{Docker Compose local}} | {{Manual}} | {{localhost:3000}} |
-| {{Staging}} | {{Ex: ECS / Railway}} | {{CI/CD auto no merge}} | {{staging.api.exemplo.com}} |
-| {{Production}} | {{Ex: ECS / Kubernetes}} | {{CI/CD com aprovacao}} | {{api.exemplo.com}} |
+| Development | Local (npm) | Manual | `npm run dev` |
+| Staging | VPS | GitHub Actions | `npm run build && npm start` |
+| Production | VPS + PM2 | GitHub Actions | `pm2 start` |
 
 **Pipeline CI/CD:**
-
 ```
-Push → Lint → Test → Build → Deploy Staging → Smoke Test → Deploy Prod
+Push → Lint → Typecheck → Test → Build → Deploy
 ```
-
-<!-- APPEND:deploy -->
 
 > (ver [02-project-structure.md](02-project-structure.md) para a arvore de diretorios)

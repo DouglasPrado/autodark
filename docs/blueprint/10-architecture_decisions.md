@@ -36,46 +36,100 @@ Registre um ADR sempre que a equipe tomar uma decisão que:
 
 ---
 
-## Exemplo
+## ADRs do Projeto
 
-> Este exemplo usa o formato simplificado. Para novos ADRs, use o [template completo](../adr/adr-template.md) que inclui Drivers de Decisão, Riscos e Histórico.
+### ADR-001: Monolito Node.js + CLI como arquitetura principal
 
-### ADR-001: Uso de PostgreSQL como banco de dados principal
-
-**Data:** 2026-01-15
+**Data:** 2026-03-30
 
 **Status:** Aceita
 
-#### Contexto
+**Resumo:** Sistema implementado como monolito Node.js/TypeScript com CLI como ponto de entrada, sem microsserviços ou UI.
 
-O sistema precisa de um banco de dados relacional para armazenar dados transacionais com integridade referencial. A equipe possui experiência com bancos relacionais e o volume esperado inicial é de até 500 mil registros por mês. O projeto é hospedado em infraestrutura cloud com suporte a serviços gerenciados.
+**Decisão:** [Ver ADR completa](adr/adr-001-monolito-nodejs.md)
 
-#### Opções Consideradas
+---
 
-| Opção | Prós | Contras |
-|-------|------|---------|
-| PostgreSQL | Open-source, extensível (JSONB, full-text search), ampla comunidade, suporte nativo em todos os cloud providers | Configuração de replicação mais manual que alternativas gerenciadas |
-| MySQL | Muito popular, simples de operar, boa performance para leitura | Menos recursos avançados (tipos de dados, extensões), suporte a JSON menos maduro |
-| MongoDB | Flexibilidade de schema, escala horizontal nativa | Sem transações ACID tradicionais em múltiplas coleções, equipe sem experiência |
+### ADR-002: SQLite (dev) / PostgreSQL (prod) para persistência
 
-#### Decisão
+**Data:** 2026-03-30
 
-Escolhemos **PostgreSQL** por oferecer o melhor equilíbrio entre funcionalidades avançadas (JSONB, CTEs, índices parciais), maturidade e experiência da equipe. O suporte nativo em cloud providers (RDS, Cloud SQL, Azure Database) simplifica a operação.
+**Status:** Aceita
 
-#### Consequências
+**Resumo:** Banco de dados relacional com SQLite para desenvolvimento e PostgreSQL para produção.
 
-**Positivas:**
-- Suporte a consultas complexas e dados semi-estruturados (JSONB) sem banco adicional
-- Ecossistema maduro de ferramentas de migração e monitoramento
-- Equipe já possui conhecimento, reduzindo curva de aprendizado
+**Decisão:** [Ver ADR completa](adr/adr-002-database-sqlite-postgres.md)
 
-**Negativas:**
-- Se o volume crescer significativamente, pode ser necessário sharding ou read-replicas
-- Funcionalidades NoSQL (JSONB) não substituem um banco de documentos para cenários de alta escala
+---
 
-**Ações necessárias:**
-- Provisionar instância PostgreSQL 16 no ambiente cloud
-- Configurar ferramenta de migração de schema (ex.: Flyway ou migrate)
-- Definir política de backup e retenção
+### ADR-003: Pipeline síncrono com retry sem mensageria
+
+**Data:** 2026-03-30
+
+**Status:** Aceita
+
+**Resumo:** Pipeline executa de forma síncrona, com retry em cada step e persistência de estado.
+
+**Decisão:** [Ver ADR completa](adr/adr-003-pipeline-sincrono.md)
+
+---
+
+### ADR-004: FFmpeg como motor de renderização scene-based
+
+**Data:** 2026-03-30
+
+**Status:** Aceita
+
+**Resumo:** Renderização de vídeo via FFmpeg CLI, processando cada cena individualmente.
+
+**Decisão:** [Ver ADR completa](adr/adr-004-ffmpeg-render.md)
+
+---
+
+### ADR-005: OpenRouter como gateway LLM
+
+**Data:** 2026-03-30
+
+**Status:** Aceita
+
+**Resumo:** Acesso unificado a múltiplos modelos LLM via API OpenRouter.
+
+**Decisão:** [Ver ADR completa](adr/adr-005-openrouter-llm.md)
+
+---
+
+### ADR-006: Sem UI — Ferramenta CLI only
+
+**Data:** 2026-03-30
+
+**Status:** Aceita
+
+**Resumo:** Sistema operado exclusivamente via CLI/scripts, sem dashboard ou interface web.
+
+**Decisão:** [Ver ADR completa](adr/adr-006-cli-only.md)
+
+---
+
+### ADR-007: Learning Engine assíncrono
+
+**Data:** 2026-03-30
+
+**Status:** Aceita
+
+**Resumo:** Learning Loop executa de forma assíncrona, não bloqueando produção de vídeos.
+
+**Decisão:** [Ver ADR completa](adr/adr-007-learning-assincrono.md)
+
+---
+
+### ADR-008: TypeScript com funções puras
+
+**Data:** 2026-03-30
+
+**Status:** Aceita
+
+**Resumo:** Linguagem TypeScript com paradigma funcional, cada step recebendo e retornando contexto.
+
+**Decisão:** [Ver ADR completa](adr/adr-008-typescript-funcional.md)
 
 <!-- APPEND:adrs -->

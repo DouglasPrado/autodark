@@ -1,112 +1,406 @@
 # Services
 
-Define todos os services do backend — metodos, parametros, retorno, dependencias e fluxos detalhados. Esta e a camada de orquestracao de logica de negocio.
+> Camada de orquestração de lógica de negócio. Services orquestram engines e repositories.
+
+<!-- do blueprint: 06-system-architecture.md -->
+<!-- do blueprint: 07-critical_flows.md -->
 
 ---
 
-## Convencoes de Services
+## Convenções de Services
 
-> Quais regras se aplicam a todos os services?
-
-- {{Services orquestram logica de negocio — NAO acessam banco diretamente}}
-- {{Services recebem DTOs e retornam entidades de dominio ou DTOs de response}}
-- {{Toda operacao critica e executada dentro de transacao}}
-- {{Services emitem eventos de dominio apos operacoes bem-sucedidas}}
-- {{Services nao conhecem HTTP — sem req/res, headers ou status codes}}
+- **Services orquestram lógica de negócio** — NAO acessam banco diretamente (usam repositories)
+- **Services recebem DTOs e retornam entidades de domínio ou DTOs de response**
+- **Toda operação crítica é executada dentro de transação**
+- **Services emitem eventos de domínio após operações bem-sucedidas**
+- **Services não conhecem HTTP** — sem req/res, headers ou status codes
+- **CLI project**: Services são chamados diretamente pelo Pipeline Orchestrator
 
 ---
 
-## Catalogo de Services
+## Catálogo de Services
 
-> Para cada service, documente responsabilidade, dependencias e metodos.
+### PipelineService
 
-### {{NomeService}}
+**Responsabilidade:** Orquestra execução do pipeline de geração de vídeo, gerencia estado, retry e persistência.
 
-**Responsabilidade:** {{O que este service faz no sistema}}
+**Não faz:** Não processa scenes individualmente (Engine), não acessa APIs externas.
 
-**Nao faz:** {{O que este service NAO faz — delimite fronteiras}}
+**Dependências:**
 
-**Dependencias:**
+| Dependência | Tipo | Função |
+|-------------|------|--------|
+| PipelineRepository | Repository | Persistência de pipelines |
+| ContentEngine | Engine | Gera ideia e roteiro |
+| SceneEngine | Engine | Segmenta em cenas |
+| VoiceEngine | Engine | Gera áudio |
+| VisualEngine | Engine | Busca assets visuais |
+| PacingEngine | Engine | Aplica controle de ritmo |
+| RenderEngine | Engine | Renderiza vídeo |
+| ThumbnailEngine | Engine | Gera thumbnail |
+| UploadService | Service | Publica no YouTube |
+| EventBus | Infrastructure | Emissão de eventos |
 
-| Dependencia | Tipo | Funcao |
-| --- | --- | --- |
-| {{NomeRepository}} | {{Repository}} | {{Acesso a dados da entidade}} |
-| {{OutroService}} | {{Service}} | {{Funcao que usa do outro service}} |
-| {{EventBus}} | {{Infrastructure}} | {{Emissao de eventos}} |
-| {{CacheService}} | {{Infrastructure}} | {{Cache de consultas}} |
+**Métodos:**
 
-**Metodos:**
+| Método | Parâmetros | Retorno | Descrição |
+|--------|------------|---------|-----------|
+| execute(params) | { niche, idea?, strategyDirective? } | PipelineContext | Executa pipeline completo |
+| resume(pipelineId) | UUID | PipelineContext | Retoma pipeline pausado |
+| retryStep(pipelineId, stepName) | UUID, string | PipelineContext | Retry de step específico |
+| getStatus(pipelineId) | UUID | PipelineStatus | Retorna status atual |
+| cancel(pipelineId) | UUID | void | Cancela pipeline em execução |
 
-| Metodo | Parametros | Retorno | Descricao |
-| --- | --- | --- | --- |
-| {{create(dto)}} | {{CreateDTO}} | {{Entidade}} | {{Cria recurso, valida regras, emite evento}} |
-| {{findById(id)}} | {{UUID}} | {{Entidade \| null}} | {{Busca por ID, verifica permissao}} |
-| {{update(id, dto)}} | {{UUID, UpdateDTO}} | {{Entidade}} | {{Valida, atualiza, invalida cache}} |
-| {{delete(id)}} | {{UUID}} | {{void}} | {{Verifica permissao, soft delete, emite evento}} |
-| {{list(filters)}} | {{ListFiltersDTO}} | {{PaginatedResult}} | {{Aplica filtros, paginacao, ordenacao}} |
+---
 
-<!-- APPEND:services -->
+### ContentEngine (Service)
+
+**Responsabilidade:** Gera ideias e roteiros via LLM usando templates otimizados para retenção.
+
+**Não faz:** Não segmenta roteiro em scenes, não gera áudio.
+
+**Dependências:**
+
+| Dependência | Tipo | Função |
+|-------------|------|--------|
+| LLMClient | Infrastructure | Chamadas ao OpenRouter |
+| LearningStateRepository | Repository | Lee pesos de learning |
+| PromptBuilder | Infrastructure | Monta prompts |
+
+**Métodos:**
+
+| Método | Parâmetros | Retorno | Descrição |
+|--------|------------|---------|-----------|
+| generateIdea(niche, directive?) | string, StrategyDirective? | Idea | Gera ideia automaticamente |
+| generateScript(idea, template) | Idea, Template | Script | Gera roteiro estruturado |
+| generateHookVariants(idea, count) | Idea, number | string[] | Gera múltiplas variants de hook |
+| optimizeWithLearning(script) | Script | Script | Otimiza com learning weights |
+
+---
+
+### SceneEngine (Service)
+
+**Responsabilidade:** Segmenta roteiro em cenas, estima durações, gera visual queries.
+
+**Não faz:** Não gera áudio, não busca assets visuais.
+
+**Dependências:**
+
+| Dependência | Tipo | Função |
+|-------------|------|--------|
+| Script | Domain Entity | Roteiro de entrada |
+
+**Métodos:**
+
+| Método | Parâmetros | Retorno | Descrição |
+|--------|------------|---------|-----------|
+| splitIntoScenes(script) | Script | Scene[] | Segmenta roteiro em cenas |
+| estimateDurations(scenes) | Scene[] | Scene[] | Estima duração por cena |
+| generateVisualQueries(scenes) | Scene[] | Scene[] | Gera queries para busca visual |
+
+---
+
+### VoiceEngine (Service)
+
+**Responsabilidade:** Gera narração via TTS, aplica perfis de voz, concatena segmentos.
+
+**Não faz:** Não gera roteiro, não busca assets visuais.
+
+**Dependências:**
+
+| Dependência | Tipo | Função |
+|-------------|------|--------|
+| ElevenLabsClient | Infrastructure | API de TTS |
+| AudioSegmentRepository | Repository | Persistência de áudios |
+
+**Métodos:**
+
+| Método | Parâmetros | Retorno | Descrição |
+|--------|------------|---------|-----------|
+| generateVoice(scene) | Scene | AudioSegment | Gera áudio para uma cena |
+| generateAll(scenes) | Scene[] | AudioSegment[] | Gera áudio para todas as cenas |
+| mergeAudioSegments(segments) | AudioSegment[] | Buffer | Concatena segmentos |
+
+---
+
+### VisualEngine (Service)
+
+**Responsabilidade:** Busca clips/imagens no Pexels, ranqueia por relevância, baixa assets.
+
+**Não faz:** Não gera roteiro, não gera áudio.
+
+**Dependências:**
+
+| Dependência | Tipo | Função |
+|-------------|------|--------|
+| PexelsClient | Infrastructure | API do Pexels |
+| DalleClient | Infrastructure | Fallback para geração IA |
+| AssetRepository | Repository | Cache de assets |
+| AssetStorage | Infrastructure | Download e armazenamento local |
+
+**Métodos:**
+
+| Método | Parâmetros | Retorno | Descrição |
+|--------|------------|---------|-----------|
+| searchClips(query, count) | string, number | Clip[] | Busca clips no Pexels |
+| rankClips(query, clips) | string, Clip[] | Clip[] | Ranqueia por relevância |
+| downloadMedia(clip) | Clip | Clip | Baixa asset para local |
+| fallbackToAI(query) | string | Clip | Gera via DALL-E se Pexels falhar |
+
+---
+
+### PacingEngine (Service)
+
+**Responsabilidade:** Controla ritmo do vídeo: max 2.5s por cena, pattern interrupts, zoom effects.
+
+**Não faz:** Não gera roteiro, não renderiza.
+
+**Dependências:**
+
+| Dependência | Tipo | Função |
+|-------------|------|--------|
+| LearningStateRepository | Repository | Lee pesos de pacing |
+
+**Métodos:**
+
+| Método | Parâmetros | Retorno | Descrição |
+|--------|------------|---------|-----------|
+| enforceMaxSceneDuration(scenes) | Scene[] | Scene[] | Garante max 2.5s por cena |
+| addPatternInterrupts(scenes) | Scene[] | Scene[] | Adiciona interrupts |
+| applyZoomEffects(scenes) | Scene[] | Scene[] | Aplica zoom em momentos-chave |
+| addMicroTransitions(scenes) | Scene[] | Scene[] | Adiciona transições |
+
+---
+
+### RenderEngine (Service)
+
+**Responsabilidade:** Renderiza vídeo scene-based com FFmpeg, sincroniza audio/video, legendas e música.
+
+**Não faz:** Não gera roteiro, não busca assets.
+
+**Dependências:**
+
+| Dependência | Tipo | Função |
+|-------------|------|--------|
+| FFmpegCLI | Infrastructure | Comandos FFmpeg |
+| PipelineRepository | Repository | Persistência de state |
+
+**Métodos:**
+
+| Método | Parâmetros | Retorno | Descrição |
+|--------|------------|---------|-----------|
+| composeScene(audioSegment, clip, scene) | AudioSegment, Clip, Scene | string | Renderiza cena individual |
+| stitchScenes(scenePaths) | string[] | string | Concatena todas as cenas |
+| addSubtitles(videoPath, scenes) | string, Scene[] | string | Gera e adiciona legendas |
+| addBackgroundMusic(videoPath) | string | string | Adiciona música de fundo |
+| renderFullPipeline(scenes, audioSegments, clips) | Scene[], AudioSegment[], Clip[] | Video | Executa renderização completa |
+
+---
+
+### ThumbnailEngine (Service)
+
+**Responsabilidade:** Gera thumbnails com scoring CTR, compõe via Canvas, seleciona melhor opção.
+
+**Não faz:** Não gera roteiro, não renderiza vídeo.
+
+**Dependências:**
+
+| Dependência | Tipo | Função |
+|-------------|------|--------|
+| DalleClient | Infrastructure | Geração de thumbnails |
+| CanvasService | Infrastructure | Composição de imagem |
+| ThumbnailRepository | Repository | Persistência |
+
+**Métodos:**
+
+| Método | Parâmetros | Retorno | Descrição |
+|--------|------------|---------|-----------|
+| generateConcepts(idea) | Idea | string[] | Gera conceitos visuais |
+| generateVariants(concepts, count) | string[], number | Thumbnail[] | Gera múltiplas variantes |
+| composeThumbnail(concept) | string | Thumbnail | Compoe com texto/overlay |
+| scoreCTR(thumbnail) | Thumbnail | number | Score de potencial CTR |
+| selectBest(thumbnails) | Thumbnail[] | Thumbnail | Seleciona melhor opção |
+
+---
+
+### UploadService
+
+**Responsabilidade:** Publica vídeo no YouTube, gera título/descrição/tags automaticamente.
+
+**Não faz:** Não gera roteiro, não renderiza.
+
+**Dependências:**
+
+| Dependência | Tipo | Função |
+|-------------|------|--------|
+| YouTubeClient | Infrastructure | YouTube Data API |
+| PipelineRepository | Repository | Busca metadados |
+
+**Métodos:**
+
+| Método | Parâmetros | Retorno | Descrição |
+|--------|------------|---------|-----------|
+| upload(video, metadata) | Video, VideoMetadata | string | Upload para YouTube |
+| generateMetadata(pipelineContext) | PipelineContext | VideoMetadata | Gera título/descrição/tags |
+| setThumbnail(videoId, thumbnail) | string, Thumbnail | void | Define thumbnail |
+
+---
+
+### PerformanceService
+
+**Responsabilidade:** Coleta métricas via YouTube Analytics API, gera curvas de retenção.
+
+**Não faz:** Não gera roteiro, não renderiza.
+
+**Dependências:**
+
+| Dependência | Tipo | Função |
+|-------------|------|--------|
+| YouTubeAnalyticsClient | Infrastructure | YouTube Analytics API |
+| VideoMetricsRepository | Repository | Persistência de métricas |
+
+**Métodos:**
+
+| Método | Parâmetros | Retorno | Descrição |
+|--------|------------|---------|-----------|
+| collectMetrics(videoId) | string | VideoMetrics | Coleta métricas do YouTube |
+| getRetentionCurve(videoId) | string | number[] | Curva de retenção por segundo |
+| detectDropOffPoints(metrics) | VideoMetrics | number[] | Detecta pontos de abandono |
+| calculatePerformanceScore(metrics) | VideoMetrics | number | Score composto |
+
+---
+
+### StrategyService
+
+**Responsabilidade:** Decide próximo conteúdo baseado em dados, clusteriza tópicos, cria séries.
+
+**Não faz:** Não gera roteiro, não renderiza.
+
+**Dependências:**
+
+| Dependência | Tipo | Função |
+|-------------|------|--------|
+| LLMClient | Infrastructure | Geração de conteúdo |
+| ContentPlanRepository | Repository | Persistência de planos |
+| SeriesRepository | Repository | Persistência de séries |
+
+**Métodos:**
+
+| Método | Parâmetros | Retorno | Descrição |
+|--------|------------|---------|-----------|
+| generateContentPlan(niche) | string | ContentPlan | Gera plano de conteúdo |
+| clusterTopics(topics) | string[] | string[][] | Clusteriza tópicos |
+| prioritizeIdeas(ideas) | Idea[] | Idea[] | Prioriza ideias por potencial |
+| createSeries(title, topic, count) | string, string, number | Series | Cria série temática |
+
+---
+
+### LearningService
+
+**Responsabilidade:** Analisa performance, ajusta pesos de prompts, otimiza templates.
+
+**Não faz:** Não gera roteiro, não renderiza.
+
+**Dependências:**
+
+| Dependência | Tipo | Função |
+|-------------|------|--------|
+| LearningStateRepository | Repository | Persistência de pesos |
+| VideoMetricsRepository | Repository | Métricas de vídeos |
+| LLMClient | Infrastructure | Análise de padrões |
+
+**Métodos:**
+
+| Método | Parâmetros | Retorno | Descrição |
+|--------|------------|---------|-----------|
+| analyzeFailures(pipelineId) | UUID | LearningInsight | Analisa vídeos de baixa performance |
+| updateWeights(niche, insights) | string, LearningInsight[] | LearningState | Ajusta pesos |
+| shouldActivate(niche) | string | boolean | Verifica se pode ativar (min 5 vídeos) |
+| getWeights(niche) | string | LearningState | Retorna pesos atuais |
 
 ---
 
 ## Fluxos Detalhados
 
-> Para cada metodo critico, descreva o fluxo passo-a-passo.
-
-### {{Service.metodo()}} — Fluxo Detalhado
+### PipelineService.execute() — Fluxo Completo
 
 ```
-1. Recebe {{DTO}}
-2. Valida {{campos/regras}}
-3. Chama {{Repository.metodo()}}
-4. Se {{condicao}} → lanca {{ErroEspecifico}}
-5. Executa {{logica de negocio}}
-6. Chama {{Repository.save()}} — dentro de transacao
-7. Emite evento {{NomeEvento}} via EventBus
-8. Invalida cache {{chave}} (se aplicavel)
-9. Retorna {{resultado}}
+1. Recebe { niche, idea?, strategyDirective? }
+2. Cria PipelineContext com status=pending
+3. Carrega LearningState para o niche (ou cria default)
+4. Transiciona para status=running
+5. PASSO 1 - Content Engine:
+   5.1. Se não há idea → ContentEngine.generateIdea(niche, directive)
+   5.2. ContentEngine.generateScript(idea, template)
+   5.3. Persiste pipeline com script
+6. PASSO 2 - Scene Engine:
+   6.1. SceneEngine.splitIntoScenes(script)
+   6.2. SceneEngine.estimateDurations(scenes)
+   6.3. SceneEngine.generateVisualQueries(scenes)
+   6.4. Persiste pipeline com scenes
+7. PASSO 3 - Voice + Visual (paralelo):
+   7.1. VoiceEngine.generateAll(scenes)
+   7.2. VisualEngine.searchClips para cada scene
+   7.3. VisualEngine.rankClips
+   7.4. VisualEngine.downloadMedia
+   7.5. Persiste pipeline com audioSegments e clips
+8. PASSO 4 - Pacing Engine:
+   8.1. PacingEngine.enforceMaxSceneDuration(scenes)
+   8.2. PacingEngine.addPatternInterrupts(scenes)
+   8.3. PacingEngine.applyZoomEffects(scenes)
+   8.4. Persiste pipeline com scenes ajustadas
+9. PASSO 5 - Render Engine:
+   9.1. RenderEngine.composeScene para cada scene
+   9.2. RenderEngine.stitchScenes
+   9.3. RenderEngine.addSubtitles
+   9.4. RenderEngine.addBackgroundMusic
+   9.5. Persiste pipeline com videoPath
+10. PASSO 6 - Thumbnail Engine:
+    10.1. ThumbnailEngine.generateConcepts(idea)
+    10.2. ThumbnailEngine.generateVariants
+    10.3. ThumbnailEngine.scoreCTR para cada thumbnail
+    10.4. ThumbnailEngine.selectBest
+    10.5. Persiste pipeline com thumbnailPath
+11. PASSO 7 - Upload:
+    11.1. UploadService.generateMetadata(context)
+    11.2. UploadService.upload(video, metadata)
+    11.3. Persiste videoId
+12. Transiciona para status=completed
+13. Emite PipelineCompleted via EventBus
+14. Retorna PipelineContext final
 ```
 
-**Transacao:** {{Sim/Nao — quais operacoes estao dentro da transacao}}
-**Idempotencia:** {{Como evitar duplicidade — ex: idempotency key, dedup por campo unico}}
-
-<!-- APPEND:fluxos -->
-
-<details>
-<summary>Exemplo — UserService.register()</summary>
-
-### UserService.register() — Fluxo Detalhado
-
-```
-1. Recebe CreateUserDTO { email, name, password }
-2. Valida formato de email e forca da senha
-3. Chama UserRepository.findByEmail(email)
-4. Se usuario existe → lanca UserAlreadyExistsError
-5. Hash da senha com bcrypt (salt rounds: 12)
-6. Cria instancia User.create({ email, name, hashedPassword })
-7. BEGIN TRANSACTION
-8.   Chama UserRepository.save(user)
-9. COMMIT
-10. Emite evento UserCreated via EventBus
-11. Enfileira job SendWelcomeEmail via queue
-12. Retorna User criado (sem passwordHash)
-```
-
-**Transacao:** Sim — save esta dentro de transacao
-**Idempotencia:** Email unico garante dedup natural
-
-</details>
+**Transação:** Sim — cada step persiste estado dentro de transação
+**Idempotência:** Pipeline ID único, cada step verifica se já foi executado
 
 ---
 
-## Injecao de Dependencias
+### LearningService.updateWeights() — Fluxo de Ajuste
 
-> Como os services recebem suas dependencias?
+```
+1. Recebe { niche, insights }
+2. Busca LearningState atual para o niche
+3. Para cada insight:
+   3.1. Calcula delta (max 10% por ajuste)
+   3.2. Aplica ajuste ao peso correspondente
+4. Atualiza LearningState com novos pesos
+5. Incrementa analyzedVideos
+6. Persiste LearningState
+7. Emite LearningWeightsUpdated via EventBus
+8. Retorna LearningState atualizado
+```
 
-| Estrategia | Descricao |
-| --- | --- |
-| {{Constructor injection}} | {{Dependencias passadas via construtor}} |
-| {{Container DI}} | {{Ex: tsyringe, inversify, Nest.js @Inject}} |
-| {{Factory functions}} | {{Funcoes que montam o service com deps}} |
+**Transação:** Sim — atualização atômica
+**Idempotência:** LearningState.niche é único, conflito resolvedor por upsert
 
-> (ver [07-controllers.md](07-controllers.md) para como controllers chamam os services)
+---
+
+## Injeção de Dependências
+
+| Estratégia | Descrição |
+|------------|------------|
+| Constructor injection | Dependências passadas via construtor |
+| Factory functions | Funções que montam o service com deps |
+| Manual DI | Sem container — instâncias criadas em `src/index.ts` |
+
+> Ver [09-errors.md](09-errors.md) para tratamento de erros

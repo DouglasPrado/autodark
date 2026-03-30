@@ -1,102 +1,37 @@
-# Permissoes
+# Permissões
 
-Define roles, permissoes, matriz de acesso por recurso e regras de ownership.
+> **N/A — Sistema mono-usuário (operador).**
 
----
-
-## Modelo de Autorizacao
-
-> Qual modelo de autorizacao o sistema usa?
-
-| Aspecto | Decisao |
-| --- | --- |
-| {{Modelo}} | {{RBAC / ABAC / Hibrido}} |
-| {{Metodo de autenticacao}} | {{JWT / Session / OAuth 2.0}} |
-| {{Provedor}} | {{Auth0 / Cognito / Keycloak / Proprio}} |
-| {{Onde verificar}} | {{Middleware de Authorization}} |
-| {{Multi-tenancy}} | {{Sim/Nao — se sim, tenant_id em todo recurso}} |
+O sistema **Mestra AI** é uma ferramenta CLI para um único operador. Não há sistema de autenticação ou permissões multi-usuário.
 
 ---
 
-## Roles
+## Modelo de Autorização
 
-> Quais perfis de acesso existem?
-
-| Role | Descricao | Herda de | Pode criar |
-| --- | --- | --- | --- |
-| {{admin}} | {{Acesso total ao sistema}} | {{—}} | {{Tudo}} |
-| {{manager}} | {{Gerencia equipe e recursos do time}} | {{user}} | {{Usuarios, recursos do time}} |
-| {{user}} | {{Acesso aos proprios dados}} | {{viewer}} | {{Proprio perfil, proprios recursos}} |
-| {{viewer}} | {{Somente leitura}} | {{—}} | {{Nada}} |
-
-<!-- APPEND:roles -->
+| Aspecto | Decisão |
+|---------|----------|
+| Modelo | Nenhum (mono-usuário) |
+| Autenticação | Variáveis de ambiente (API keys) |
+| Acesso | Local ao operador |
 
 ---
 
-## Matriz de Permissoes por Recurso
+## Configuração de Segurança
 
-> Quem pode fazer o que em cada recurso?
+O sistema usa autenticação via variáveis de ambiente para APIs externas:
 
-### {{Recurso}} (ex: Users)
-
-| Acao | admin | manager | user | viewer | Regra Especial |
-| --- | --- | --- | --- | --- | --- |
-| {{GET /recurso (listar)}} | {{todos}} | {{proprio time}} | {{proprio}} | {{—}} | {{manager filtra por team_id}} |
-| {{GET /recurso/:id}} | {{todos}} | {{proprio time}} | {{proprio}} | {{proprio}} | {{user/viewer so ve si mesmo}} |
-| {{POST /recurso}} | {{sim}} | {{sim}} | {{nao}} | {{nao}} | {{—}} |
-| {{PATCH /recurso/:id}} | {{sim}} | {{proprio time}} | {{proprio}} | {{nao}} | {{user so edita a si mesmo}} |
-| {{DELETE /recurso/:id}} | {{sim}} | {{nao}} | {{nao}} | {{nao}} | {{Soft delete}} |
-
-<!-- APPEND:matriz -->
-
----
-
-## Regras de Ownership
-
-> Quais recursos pertencem a um usuario/time e como o acesso e controlado?
-
-| Recurso | Owner Field | Regra |
-| --- | --- | --- |
-| {{User}} | {{id}} | {{Cada user so acessa/edita a si mesmo (exceto admin)}} |
-| {{Order}} | {{userId}} | {{Cada user so ve seus pedidos (exceto admin/manager)}} |
-| {{Team}} | {{managerId}} | {{Manager acessa dados do time, membros acessam proprio}} |
-
----
-
-## Campos Visiveis por Role
-
-> Existem campos que so determinados roles podem ver?
-
-| Entidade | Campo | admin | manager | user | viewer |
-| --- | --- | --- | --- | --- | --- |
-| {{User}} | {{email}} | {{sim}} | {{sim (time)}} | {{proprio}} | {{nao}} |
-| {{User}} | {{role}} | {{sim}} | {{sim}} | {{sim}} | {{sim}} |
-| {{User}} | {{lastLoginAt}} | {{sim}} | {{sim (time)}} | {{proprio}} | {{nao}} |
-| {{Order}} | {{internalNotes}} | {{sim}} | {{sim}} | {{nao}} | {{nao}} |
-
-<!-- APPEND:campos-visiveis -->
-
----
-
-## Token e Claims
-
-> Quais informacoes o token JWT carrega?
-
-```json
-{
-  "sub": "{{userId}}",
-  "email": "{{email}}",
-  "role": "{{role}}",
-  "teamId": "{{teamId (se aplicavel)}}",
-  "iat": {{issued_at}},
-  "exp": {{expiration}},
-  "iss": "{{issuer}}"
-}
+```bash
+# .env
+OPENROUTER_API_KEY=sk-...
+ELEVENLABS_API_KEY=...
+PEXELS_API_KEY=...
+YOUTUBE_CLIENT_ID=...
+YOUTUBE_CLIENT_SECRET=...
+YOUTUBE_REFRESH_TOKEN=...
 ```
 
-| Tipo de Token | Expiracao | Uso |
-| --- | --- | --- |
-| {{Access Token}} | {{15 min}} | {{Header Authorization em cada request}} |
-| {{Refresh Token}} | {{7 dias}} | {{POST /auth/refresh para renovar access}} |
+> Ver [docs/blueprint/13-security.md](../blueprint/13-security.md) para detalhes de segurança.
 
-> (ver [12-events.md](12-events.md) para eventos e mensageria)
+---
+
+> Ver [docs/blueprint/](../blueprint/) para documentação técnica completa.

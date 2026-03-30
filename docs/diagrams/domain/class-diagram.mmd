@@ -1,59 +1,194 @@
 %% ============================================================
-%% Modelo de Domínio
-%% Referência: docs/04-domain-model.md
-%% ============================================================
-%% GUIA: Represente as entidades principais do domínio com seus
-%% atributos e relacionamentos. Substitua os {{placeholders}}
-%% pelos nomes reais do seu projeto.
-%%
-%% Perguntas orientadoras:
-%% - Quais são as entidades centrais do domínio?
-%% - Quais atributos cada entidade possui?
-%% - Quais comportamentos (métodos) cada entidade expõe?
-%% - Como as entidades se relacionam entre si?
-%% - Existem hierarquias de herança no domínio?
+%% Modelo de Domínio — Mestra AI
+%% Referência: docs/blueprint/04-domain-model.md
 %% ============================================================
 
 classDiagram
     direction TB
 
-    class {{Entidade1}} {
-        +String {{atributo1_id}}
-        +String {{atributo1_nome}}
-        +DateTime {{atributo1_criadoEm}}
-        +criar() {{Entidade1}}
-        +atualizar(dados) void
+    %% --- Entidades Principais ---
+
+    class PipelineContext {
+        +string id
+        +string niche
+        +ContentPlan contentPlan
+        +StrategyDirective strategyDirective
+        +string idea
+        +Script script
+        +Scene[] scenes
+        +AudioSegment[] audioSegments
+        +Clip[] clips
+        +string videoPath
+        +string thumbnailPath
+        +VideoMetadata metadata
+        +string videoId
+        +VideoMetrics metrics
+        +number performanceScore
+        +LearningState learningState
+        +string status
+        +Date createdAt
+        +Date updatedAt
     }
 
-    class {{Entidade2}} {
-        +String {{atributo2_id}}
-        +String {{atributo2_descricao}}
-        +Decimal {{atributo2_valor}}
-        +calcular() Decimal
-        +validar() Boolean
+    class Idea {
+        +string id
+        +string niche
+        +string text
+        +string angle
+        +string source
+        +Date createdAt
     }
 
-    class {{Entidade3}} {
-        +String {{atributo3_id}}
-        +String {{atributo3_tipo}}
-        +registrar() void
+    class Script {
+        +string id
+        +string ideaId
+        +string template
+        +string hook
+        +string setup
+        +string escalada
+        +string twist
+        +string payoff
+        +string loop
+        +number estimatedDuration
+        +Date createdAt
     }
 
-    class {{Entidade4_Base}} {
-        <<abstract>>
-        +String id
-        +DateTime criadoEm
-        +DateTime atualizadoEm
-        +auditar() void
+    class Scene {
+        +string id
+        +string scriptId
+        +number order
+        +string text
+        +number duration
+        +number start
+        +number end
+        +string visualQuery
+        +string segmentType
+        +PacingConfig pacing
+    }
+
+    class AudioSegment {
+        +string id
+        +string sceneId
+        +string text
+        +string voiceId
+        +string audioUrl
+        +number duration
+        +Date createdAt
+    }
+
+    class Clip {
+        +string id
+        +string sceneId
+        +string query
+        +string source
+        +string mediaId
+        +string mediaUrl
+        +string localPath
+        +number duration
+        +number score
+        +Date createdAt
+    }
+
+    class Video {
+        +string id
+        +string pipelineId
+        +string path
+        +number duration
+        +string resolution
+        +string format
+        +number size
+        +boolean hasSubtitles
+        +boolean hasMusic
+        +Date createdAt
+    }
+
+    class Thumbnail {
+        +string id
+        +string videoId
+        +string[] concepts
+        +string imageUrl
+        +string localPath
+        +number ctrScore
+        +boolean isSelected
+        +Date createdAt
+    }
+
+    class VideoMetrics {
+        +string id
+        +string videoId
+        +Date publishedAt
+        +number views
+        +number likes
+        +number comments
+        +number retention
+        +number ctr
+        +number avgWatchTime
+        +number[] dropOffPoints
+        +object retentionCurve
+        +Date createdAt
+    }
+
+    class ContentPlan {
+        +string id
+        +string niche
+        +string[] topics
+        +Series[] series
+        +Date generatedAt
+    }
+
+    class StrategyDirective {
+        +string id
+        +string topic
+        +string angle
+        +object targetMetrics
+        +string template
+        +number priority
+        +Date createdAt
+    }
+
+    class LearningState {
+        +string id
+        +string niche
+        +object hookWeights
+        +object templateWeights
+        +object pacingWeights
+        +object contentWeights
+        +boolean isActive
+        +Date lastUpdated
+        +number analyzedVideos
+    }
+
+    class Series {
+        +string id
+        +string title
+        +string topic
+        +number episodeCount
+        +string[] episodes
+        +string status
+        +Date createdAt
     }
 
     %% --- Relacionamentos ---
-    %% Associação: {{Entidade1}} possui muitos {{Entidade2}}
-    {{Entidade1}} "1" --> "*" {{Entidade2}} : {{descrição_relação_1_2}}
 
-    %% Composição: {{Entidade2}} é composto por {{Entidade3}}
-    {{Entidade2}} "1" *-- "1..*" {{Entidade3}} : {{descrição_composição_2_3}}
+    PipelineContext "1" --> "0..1" ContentPlan : has
+    PipelineContext "1" --> "0..1" StrategyDirective : has
+    PipelineContext "1" --> "0..1" Script : has
+    PipelineContext "1" --> "0..*" Scene : contains
+    PipelineContext "1" --> "0..1" Video : produces
+    PipelineContext "1" --> "0..1" Thumbnail : produces
+    PipelineContext "1" --> "0..1" LearningState : carries
+    PipelineContext "1" --> "0..1" VideoMetrics : has
 
-    %% Herança: {{Entidade1}} estende {{Entidade4_Base}}
-    {{Entidade4_Base}} <|-- {{Entidade1}} : estende
-    {{Entidade4_Base}} <|-- {{Entidade2}} : estende
+    Idea "1" --> "0..*" Script : generates
+    Script "1" --> "0..*" Scene : segments
+
+    Scene "1" --> "0..1" AudioSegment : has
+    Scene "1" --> "0..1" Clip : has
+
+    Video "1" --> "0..1" Thumbnail : uses
+    Video "1" --> "0..*" VideoMetrics : tracked_by
+
+    ContentPlan "1" --> "0..*" Series : contains
+    Series "1" --> "0..*" Video : contains
+
+    LearningState "N" --> "1" PipelineContext : associated_with

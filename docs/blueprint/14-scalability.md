@@ -2,7 +2,7 @@
 
 > Como o sistema crescerá para atender mais usuários, mais dados e mais carga?
 
-Este documento descreve as estratégias, limites e planos para garantir que o sistema escale de forma sustentável conforme a demanda aumenta.
+Este Documento descreve as estratégias, limites e planos para garantir que o sistema escale de forma sustentável conforme a demanda aumenta.
 
 ---
 
@@ -12,51 +12,43 @@ Este documento descreve as estratégias, limites e planos para garantir que o si
 
 ### Escala Horizontal
 
-Adicionar mais instâncias do mesmo serviço para distribuir a carga.
-
 | Aspecto | Detalhes |
 |---|---|
-| **Componentes elegíveis** | {{listar serviços/componentes que podem ter múltiplas instâncias}} |
-| **Mecanismo de balanceamento** | {{round-robin / least-connections / IP hash / outro}} |
-| **Estado da sessão** | {{stateless / sticky sessions / sessão externalizada em cache}} |
-| **Auto-scaling** | {{sim/não — regras: CPU > X%, memória > Y%, fila > Z mensagens}} |
-| **Mínimo de instâncias** | {{número mínimo em produção}} |
-| **Máximo de instâncias** | {{número máximo permitido}} |
+| **Componentes elegíveis** | Workers de processamento de vídeo (separar rendering), Workers de coleta de métricas |
+| **Mecanismo de balanceamento** | Não aplicável — pipeline é sequencial por vídeo |
+| **Estado da sessão** | Stateless — PipelineContext é passado entre steps |
+| **Auto-scaling** | Não aplicável na versão inicial — volume controlado (10+ vídeos/dia) |
+| **Mínimo de instâncias** | 1 (servidor único) |
+| **Máximo de instâncias** | Limitado pelo custo de APIs (OpenRouter, ElevenLabs) |
 
 ### Escala Vertical
 
-Aumentar os recursos (CPU, memória, disco) das máquinas existentes.
-
 | Aspecto | Detalhes |
 |---|---|
-| **Componentes elegíveis** | {{listar componentes que se beneficiam de máquinas maiores}} |
-| **Configuração atual** | {{tipo de instância / especificações atuais}} |
-| **Limite prático** | {{maior configuração viável antes de precisar escalar horizontalmente}} |
-| **Janela de manutenção** | {{quando o upgrade pode ser feito com menor impacto}} |
+| **Componentes elegíveis** | Servidor de rendering (FFmpeg é CPU-intensive) |
+| **Configuração atual** | Mínimo: 4 vCPU, 8GB RAM |
+| **Limite prático** | 16 vCPU para renderização paralela |
+| **Janela de manutenção** | Qualquer horário (sem usuários online) |
 
 ### Caching
 
-Reduzir a carga em serviços e bancos de dados armazenando resultados frequentes.
-
 | Aspecto | Detalhes |
 |---|---|
-| **Tecnologia** | {{Redis / Memcached / CDN / cache em memória / outro}} |
-| **Camadas de cache** | {{CDN → API Gateway → aplicação → banco de dados}} |
-| **O que cachear** | {{respostas de API, consultas pesadas, assets estáticos, sessões}} |
-| **Estratégia de invalidação** | {{TTL / event-driven / write-through / write-behind}} |
-| **Tamanho estimado** | {{volume de dados em cache}} |
+| **Tecnologia** | Disco local (assets), Banco (PipelineContext) |
+| **Camadas de cache** | Assets (Pexels) baixados e reutilizados |
+| **O que cachear** | Clips baixados, áudios gerados, templates de roteiro |
+| **Estratégia de invalidação** | TTL de 30 dias para assets |
+| **Tamanho estimado** | 1-5 GB/mês (vídeos + assets) |
 
 ### Particionamento / Sharding
 
-Dividir os dados entre múltiplas instâncias de armazenamento.
-
 | Aspecto | Detalhes |
 |---|---|
-| **Estratégia de particionamento** | {{por tenant / por região / por range de ID / hash}} |
-| **Chave de partição** | {{campo ou critério usado para distribuir os dados}} |
-| **Número de shards** | {{quantidade atual e planejada}} |
-| **Rebalanceamento** | {{como redistribuir dados quando adicionar/remover shards}} |
-| **Consultas cross-shard** | {{como lidar com queries que cruzam partições}} |
+| **Estratégia de particionamento** | Não aplicável — volume não justifica |
+| **Chave de partição** | N/A |
+| **Número de shards** | N/A |
+| **Rebalanceamento** | N/A |
+| **Consultas cross-shard** | N/A |
 
 ---
 
@@ -66,13 +58,13 @@ Dividir os dados entre múltiplas instâncias de armazenamento.
 
 | Componente | Limite Atual | Gargalo | Ação quando atingir |
 |---|---|---|---|
-| {{API / serviço X}} | {{ex: 500 req/s}} | {{CPU / memória / I/O / rede}} | {{escalar horizontalmente / otimizar queries / adicionar cache}} |
-| {{Banco de dados}} | {{ex: 10k conexões simultâneas}} | {{conexões / disco / CPU}} | {{read replicas / connection pooling / sharding}} |
-| {{Fila de mensagens}} | {{ex: 50k msg/s}} | {{throughput / armazenamento}} | {{adicionar partições / escalar consumers}} |
-| {{Armazenamento}} | {{ex: 500 GB}} | {{espaço / IOPS}} | {{migrar para storage maior / arquivar dados antigos}} |
-| {{Cache}} | {{ex: 16 GB de memória}} | {{memória / conexões}} | {{cluster de cache / ajustar TTL / eviction policy}} |
-
-<!-- APPEND:capacity-limits -->
+| Vídeos/dia | 10+ | Tempo de renderização (CPU) | Renderização paralela em workers |
+| Execuções simultâneas | 1 (por vídeo) | Recursos do servidor | Workers separados |
+| Taxa de chamadas OpenRouter | 60 req/min (plano) | Rate limit da API | Retry com backoff |
+| Taxa de chamadas ElevenLabs | 50 req/min | Rate limit da API | Retry com backoff |
+| Upload YouTube | 6 uploads/dia | Limite do YouTube | Limite natural |
+| Armazenamento local | Disco do servidor | Espaço em disco | Arquivar vídeos antigos |
+| Conexões PostgreSQL | 100 | Limite de conexões | Connection pooling |
 
 ---
 
@@ -80,12 +72,12 @@ Dividir os dados entre múltiplas instâncias de armazenamento.
 
 | Métrica | Atual | 6 meses | 12 meses | Ação necessária |
 |---|---|---|---|---|
-| Usuários ativos | {{número atual}} | {{projeção 6m}} | {{projeção 12m}} | {{descrever ação}} |
-| Requisições/segundo | {{valor atual}} | {{projeção 6m}} | {{projeção 12m}} | {{descrever ação}} |
-| Volume de dados | {{tamanho atual}} | {{projeção 6m}} | {{projeção 12m}} | {{descrever ação}} |
-| Armazenamento de arquivos | {{tamanho atual}} | {{projeção 6m}} | {{projeção 12m}} | {{descrever ação}} |
-| Conexões simultâneas | {{valor atual}} | {{projeção 6m}} | {{projeção 12m}} | {{descrever ação}} |
-| Tempo médio de resposta | {{valor atual}} | {{meta 6m}} | {{meta 12m}} | {{descrever ação}} |
+| Vídeos/dia | 10 | 20 | 50 | workers separados se >20/dia |
+| Pipelines simultâneos | 1 | 2 | 5 | Auto-scaling de workers |
+| Armazenamento (vídeos) | 1 GB/mês | 5 GB/mês | 25 GB/mês | Arquivar para S3/Google Drive |
+| Armazenamento (assets) | 500 MB/mês | 2 GB/mês | 10 GB/mês | TTL de 30 dias |
+| Métricas no banco | 300 reg/mês | 2K reg/mês | 10K reg/mês | Sem ação (banco suporta) |
+| Tempo de renderização | <10 min | <10 min | <10 min | Otimizar FFmpeg se aumentar |
 
 ---
 
@@ -99,14 +91,11 @@ Dividir os dados entre múltiplas instâncias de armazenamento.
 
 | O que cachear | TTL | Invalidação |
 |---|---|---|
-| {{respostas de listagem / consultas frequentes}} | {{ex: 5 min}} | {{ao criar/atualizar/deletar recurso}} |
-| {{dados de configuração / feature flags}} | {{ex: 1 hora}} | {{ao alterar configuração}} |
-| {{sessões de usuário}} | {{ex: 30 min}} | {{ao fazer logout / expiração}} |
-| {{assets estáticos (imagens, CSS, JS)}} | {{ex: 30 dias}} | {{cache busting via hash no nome do arquivo}} |
-| {{resultados de cálculos pesados}} | {{ex: 15 min}} | {{quando dados de entrada mudam}} |
-| {{tokens / permissões}} | {{ex: 5 min}} | {{ao alterar permissões do usuário}} |
-
-<!-- APPEND:cache-strategies -->
+| Assets visuais (Pexels) | 30 dias | TTL automatico |
+| Áudio gerado (ElevenLabs) | 7 dias | TTL automatico |
+| Learning state | 1 dia | Ao executar learning loop |
+| Content plan | 6 horas | Ao gerar novo |
+| Configurações de nicho | 1 hora | Ao alterar config |
 
 ---
 
@@ -114,43 +103,61 @@ Dividir os dados entre múltiplas instâncias de armazenamento.
 
 ### Objetivo
 
-Proteger o sistema contra sobrecarga, uso abusivo e garantir disponibilidade justa para todos os consumidores.
+O sistema consome APIs externas com rate limits próprios. A estratégia é retry com backoff, não rate limiting interno.
 
-### Configuração de Limites
+### Limites das APIs Externas
 
-| Endpoint / Recurso | Limite | Janela | Ação ao exceder |
-|---|---|---|---|
-| {{API pública — geral}} | {{ex: 100 req/min por IP}} | {{1 minuto}} | {{HTTP 429 + header Retry-After}} |
-| {{Autenticação / login}} | {{ex: 5 tentativas/min}} | {{1 minuto}} | {{bloqueio temporário + alerta}} |
-| {{Upload de arquivos}} | {{ex: 10 req/min por usuário}} | {{1 minuto}} | {{HTTP 429 + fila de espera}} |
-| {{Webhooks / integrações}} | {{ex: 1000 req/min por tenant}} | {{1 minuto}} | {{throttle + notificação ao parceiro}} |
-
-<!-- APPEND:rate-limits -->
+| API | Limite | Ação ao exceder |
+|---|---|---|
+| OpenRouter | 60 req/min (plano básico) | Retry com backoff 1s, 2s, 4s |
+| ElevenLabs | 50 req/min | Retry com backoff |
+| YouTube Data API | 6 uploads/dia | Limite natural |
+| YouTube Analytics | 50.000 queries/dia | Coleta a cada 6h |
+| Pexels | 200 req/hora | Cache agressivo de results |
 
 ### Estratégia de Implementação
 
 | Aspecto | Detalhes |
 |---|---|
-| **Algoritmo** | {{token bucket / sliding window / fixed window / leaky bucket}} |
-| **Onde aplicar** | {{API Gateway / middleware da aplicação / load balancer}} |
-| **Armazenamento de contadores** | {{Redis / memória local / banco de dados}} |
-| **Identificação do cliente** | {{IP / API key / token de usuário / tenant ID}} |
-| **Headers de resposta** | `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` |
-| **Tratamento de burst** | {{permitir burst de X req acima do limite por Y segundos}} |
+| **Algoritmo** | Exponential backoff |
+| **Onde aplicar** | Cliente SDK de cada API |
+| **Armazenamento de contadores** | Memória (simples) |
+| **Tentativas** | 3 com backoff: 1s, 2s, 4s |
 
 ### Degradação Graciosa
 
-Quando o sistema se aproximar dos limites, aplicar degradação progressiva:
+1. **Nível 1 — Alerta**: Métricas de rate limit >80% — monitoramento ativado
+2. **Nível 2 — Fallback**: API indisponível — usar alternativa (ex: DALL-E → Pexels)
+3. **Nível 3 — Retry estendido**: Backoff estendido (até 30s)
+4. **Nível 4 — Queue**: Se todas as APIs falharem — marcar pipeline como pending
 
-1. **Nível 1 — Alerta**: {{métricas acima de X% do limite — monitoramento ativado}}
-2. **Nível 2 — Throttle**: {{reduzir funcionalidades não-críticas, ex: desabilitar relatórios pesados}}
-3. **Nível 3 — Shedding**: {{rejeitar requisições de menor prioridade, manter apenas operações críticas}}
-4. **Nível 4 — Circuit Breaker**: {{isolar serviços em falha para evitar cascata}}
+---
+
+## 14.7 Estratégia de Crescimento
+
+### Fase 1 (0-6 meses): Operação Básica
+
+- Servidor único com tudo
+- 10-20 vídeos/dia
+- Observabilidade básica (logs)
+
+### Fase 2 (6-12 meses): Otimização
+
+- Workers separados para rendering
+- Cache de assets otimizado
+- 20-50 vídeos/dia
+
+### Fase 3 (12+ meses): Escala
+
+- Múltiplos workers
+- Renderização distribuída
+- 50+ vídeos/dia
+- Considerar Cloud Functions para rendering
 
 ---
 
 ## Referências
 
-- {{link para dashboard de métricas de capacidade}}
-- {{link para runbook de escalabilidade}}
-- {{link para documentação da infraestrutura}}
+- [ADR-003: Pipeline Síncrono](docs/adr/adr-003-pipeline-sincrono.md)
+- [ADR-004: FFmpeg](docs/adr/adr-004-ffmpeg-render.md)
+- Limites de API: OpenRouter, ElevenLabs, YouTube

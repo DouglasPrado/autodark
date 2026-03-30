@@ -1,191 +1,101 @@
 %% ============================================================
-%% Diagrama de Deploy: Produção
+%% Diagrama de Deploy: Produção — Mestra AI
 %% Referências:
-%%   - docs/06-system_architecture.md
-%%   - docs/14-scalability.md
+%%   - docs/blueprint/06-system-architecture.md
 %% ============================================================
-%% Perguntas-guia:
-%%   - Qual é o provedor de nuvem? (AWS, GCP, Azure, on-premise)
-%%   - Quantas instâncias de cada componente rodam em produção?
-%%   - Quais são os protocolos e portas expostas?
-%%   - Como é feita a escalabilidade horizontal?
-%%   - Qual é a estratégia de replicação do banco de dados?
-%%   - Existe cache distribuído? Qual tecnologia?
-%%   - Há filas de mensagens? Para quais operações assíncronas?
-%% ============================================================
+%% Arquitetura: Monolito Node.js executado via PM2/systemd
+%% Sem load balancer, sem cache externo, sem mensageria
 
 graph TB
 
     %% ===========================================================
-    %% CAMADA: CDN / Edge
-    %% Pergunta: Qual CDN é utilizada? Há WAF ou proteção DDoS?
+    %% CAMADA: Servidor / VPS
     %% ===========================================================
-    subgraph EDGE["☁️ CDN / Edge Layer"]
-        direction LR
-        CDN["{{nome-cdn}}<br/>CDN / Edge<br/>──────────<br/>Cache estático: {{ttl-cache-estatico}}<br/>WAF: {{nome-waf}}"]
-        DNS["{{nome-dns}}<br/>DNS Provider<br/>──────────<br/>TTL: {{ttl-dns}}"]
-    end
+    subgraph SERVER["🖥️ Servidor — VPS / EC2 / Droplet"]
+        direction TB
 
-    %% ===========================================================
-    %% CAMADA: Load Balancer
-    %% Pergunta: Qual tipo de load balancer? L4 ou L7?
-    %% Pergunta: Qual algoritmo de balanceamento?
-    %% ===========================================================
-    subgraph LB_LAYER["⚖️ Load Balancer"]
-        direction LR
-        LB["{{nome-load-balancer}}<br/>Load Balancer<br/>──────────<br/>Tipo: {{tipo-lb}}<br/>Algoritmo: {{algoritmo-lb}}<br/>Health check: {{intervalo-health-check}}"]
-        SSL["TLS Termination<br/>──────────<br/>Certificado: {{provedor-certificado}}<br/>Protocolo: TLS {{versao-tls}}"]
-    end
-
-    %% ===========================================================
-    %% CAMADA: Aplicação
-    %% Pergunta: Quantas instâncias mínimas/máximas?
-    %% Pergunta: Qual é a tecnologia de orquestração?
-    %% ===========================================================
-    subgraph APP_TIER["🖥️ Application Tier — {{tecnologia-orquestracao}}"]
-        direction LR
-
-        subgraph APP_GROUP_1["Grupo de Instâncias A"]
-            APP1["{{nome-servico-principal}}<br/>Instância 1<br/>──────────<br/>Runtime: {{runtime}}<br/>Porta: {{porta-app}}<br/>CPU: {{cpu-app}} / RAM: {{ram-app}}"]
-            APP2["{{nome-servico-principal}}<br/>Instância 2<br/>──────────<br/>Runtime: {{runtime}}<br/>Porta: {{porta-app}}<br/>CPU: {{cpu-app}} / RAM: {{ram-app}}"]
+        subgraph APP["Mestra AI - Monolito Node.js"]
+            direction LR
+            CLI["💻 CLI<br/>Ponto de entrada"]
+            Runtime["⚙️ Node.js 20+<br/>Runtime"]
+            Engines["⚙️ Engines<br/>Content, Scene, Voice,<br/>Visual, Pacing, Render,<br/>Thumbnail, Performance,<br/>Strategy, Learning"]
         end
 
-        subgraph APP_GROUP_2["Grupo de Instâncias B"]
-            APP3["{{nome-servico-secundario}}<br/>Instância 1<br/>──────────<br/>Runtime: {{runtime-secundario}}<br/>Porta: {{porta-servico-secundario}}"]
-            APP4["{{nome-servico-secundario}}<br/>Instância 2<br/>──────────<br/>Runtime: {{runtime-secundario}}<br/>Porta: {{porta-servico-secundario}}"]
+        subgraph STORAGE["📁 Armazenamento Local"]
+            Videos["🎬 Videos<br/>Videos renderizados"]
+            Thumbnails["🖼️ Thumbnails<br/>Thumbnails geradas"]
+            Assets["📦 Assets Cache<br/>Clips/audios baixados"]
         end
 
-        AUTOSCALER["Auto Scaler<br/>──────────<br/>Min: {{min-instancias}}<br/>Max: {{max-instancias}}<br/>Métrica: {{metrica-escala}}<br/>Threshold: {{threshold-escala}}"]
+        DB["🗄️ PostgreSQL<br/>Pipelines, metrics,<br/>learning states"]
     end
 
     %% ===========================================================
-    %% CAMADA: Cache
-    %% Pergunta: Qual tecnologia de cache? Redis, Memcached, etc.?
-    %% Pergunta: Qual a política de eviction?
+    %% CAMADA: Agendamento (opcional)
     %% ===========================================================
-    subgraph CACHE_TIER["⚡ Cache Tier"]
-        direction LR
-        CACHE_PRIMARY["{{nome-cache}}<br/>Primary<br/>──────────<br/>Porta: {{porta-cache}}<br/>Memória: {{ram-cache}}<br/>Eviction: {{politica-eviction}}"]
-        CACHE_REPLICA["{{nome-cache}}<br/>Replica<br/>──────────<br/>Modo: read-replica<br/>Sincronização: {{modo-sync-cache}}"]
+    subgraph SCHEDULER["⏰ Agendamento"]
+        Cron["⏱️ Cron / systemd timer<br/>Executa pipeline<br/>10+ videos/dia"]
     end
 
     %% ===========================================================
-    %% CAMADA: Dados
-    %% Pergunta: Qual SGBD? Qual versão?
-    %% Pergunta: Qual estratégia de replicação e backup?
+    %% Sistemas Externos
     %% ===========================================================
-    subgraph DATA_TIER["🗄️ Data Tier"]
-        direction LR
-
-        subgraph DB_CLUSTER["Cluster {{nome-sgbd}}"]
-            DB_PRIMARY["{{nome-sgbd}}<br/>Primary (Write)<br/>──────────<br/>Porta: {{porta-db}}<br/>Versão: {{versao-sgbd}}<br/>Storage: {{storage-db}}"]
-            DB_REPLICA1["{{nome-sgbd}}<br/>Read Replica 1<br/>──────────<br/>Região: {{regiao-replica-1}}<br/>Lag máximo: {{lag-maximo}}"]
-            DB_REPLICA2["{{nome-sgbd}}<br/>Read Replica 2<br/>──────────<br/>Região: {{regiao-replica-2}}<br/>Lag máximo: {{lag-maximo}}"]
-        end
-
-        BACKUP["Backup Service<br/>──────────<br/>Frequência: {{frequencia-backup}}<br/>Retenção: {{retencao-backup}}<br/>Destino: {{destino-backup}}"]
-    end
-
-    %% ===========================================================
-    %% CAMADA: Fila de Mensagens + Workers
-    %% Pergunta: Quais operações são assíncronas?
-    %% Pergunta: Qual broker de mensagens é utilizado?
-    %% ===========================================================
-    subgraph ASYNC_TIER["📨 Message Queue + Workers"]
-        direction LR
-
-        QUEUE["{{nome-broker}}<br/>Message Broker<br/>──────────<br/>Porta: {{porta-broker}}<br/>Protocolo: {{protocolo-broker}}<br/>Tópicos: {{lista-topicos}}"]
-
-        subgraph WORKERS["Worker Pool"]
-            WORKER1["Worker: {{nome-worker-1}}<br/>──────────<br/>Concorrência: {{concorrencia-worker-1}}<br/>Tarefa: {{descricao-tarefa-1}}"]
-            WORKER2["Worker: {{nome-worker-2}}<br/>──────────<br/>Concorrência: {{concorrencia-worker-2}}<br/>Tarefa: {{descricao-tarefa-2}}"]
-        end
-
-        DLQ["Dead Letter Queue<br/>──────────<br/>Retenção: {{retencao-dlq}}<br/>Alerta: {{alerta-dlq}}"]
+    subgraph EXTERNALS["☁️ Serviços Externos"]
+        OpenRouter["📦 OpenRouter<br/>Gateway LLM"]
+        ElevenLabs["📦 ElevenLabs<br/>Text-to-Speech"]
+        Pexels["📦 Pexels API<br/>Videos/Imagens"]
+        FFmpeg["📦 FFmpeg CLI<br/>Renderizacao local"]
+        YouTubeData["📦 YouTube Data API<br/>Upload"]
+        YouTubeAnalytics["📦 YouTube Analytics<br/>Metricas"]
+        DALLE["📦 DALL-E/SDXL<br/>Imagens thumbnail"]
     end
 
     %% ===========================================================
     %% CONEXÕES
     %% ===========================================================
 
-    %% Entrada do tráfego
-    DNS -->|"Resolução DNS"| CDN
-    CDN -->|"HTTPS :443"| LB
-    LB --- SSL
-    SSL -->|"{{protocolo-interno}} :{{porta-app}}"| APP1
-    SSL -->|"{{protocolo-interno}} :{{porta-app}}"| APP2
-    SSL -->|"{{protocolo-interno}} :{{porta-servico-secundario}}"| APP3
-    SSL -->|"{{protocolo-interno}} :{{porta-servico-secundario}}"| APP4
+    %% Scheduler -> App
+    Cron -->|"Dispara pipeline"| CLI
 
-    %% Aplicação → Cache
-    APP1 & APP2 -->|"{{protocolo-cache}} :{{porta-cache}}"| CACHE_PRIMARY
-    APP3 & APP4 -->|"{{protocolo-cache}} :{{porta-cache}}"| CACHE_PRIMARY
-    CACHE_PRIMARY -.->|"Replicação"| CACHE_REPLICA
+    %% App -> Engines
+    CLI -->|"Executa"| Runtime
+    Runtime -->|"Orquestra"| Engines
 
-    %% Aplicação → Banco de Dados
-    APP1 & APP2 -->|"{{protocolo-db}} :{{porta-db}}<br/>Write"| DB_PRIMARY
-    APP1 & APP2 -.->|"{{protocolo-db}} :{{porta-db}}<br/>Read"| DB_REPLICA1
-    APP3 & APP4 -.->|"{{protocolo-db}} :{{porta-db}}<br/>Read"| DB_REPLICA2
-    DB_PRIMARY -.->|"Replicação assíncrona"| DB_REPLICA1
-    DB_PRIMARY -.->|"Replicação assíncrona"| DB_REPLICA2
-    DB_PRIMARY -.->|"{{frequencia-backup}}"| BACKUP
+    %% Engines -> Databases/Storage
+    Engines -->|"Persiste"| DB
+    Engines -->|"Salva"| Videos
+    Engines -->|"Salva"| Thumbnails
+    Engines -->|"Cache"| Assets
 
-    %% Aplicação → Fila de Mensagens
-    APP1 & APP2 -->|"{{protocolo-broker}} :{{porta-broker}}"| QUEUE
-    APP3 & APP4 -->|"{{protocolo-broker}} :{{porta-broker}}"| QUEUE
-    QUEUE --> WORKER1
-    QUEUE --> WORKER2
-    QUEUE -.->|"Falhas após {{max-retentativas}}"| DLQ
-
-    %% Workers → Dados
-    WORKER1 & WORKER2 -->|"{{protocolo-db}} :{{porta-db}}"| DB_PRIMARY
-
-    %% Auto Scaler
-    AUTOSCALER -.->|"Monitora"| APP1 & APP2
-    AUTOSCALER -.->|"Monitora"| APP3 & APP4
+    %% Engines -> APIs Externas
+    Engines -->|"LLM"| OpenRouter
+    Engines -->|"TTS"| ElevenLabs
+    Engines -->|"Busca"| Pexels
+    Engines -->|"Renderiza"| FFmpeg
+    Engines -->|"Upload"| YouTubeData
+    Engines -->|"Metricas"| YouTubeAnalytics
+    Engines -->|"Gera"| DALLE
 
     %% ===========================================================
-    %% ESTILOS — C4-style colors
-    %% Azul (#438DD5): Componentes de aplicação
-    %% Verde (#67BE4B): Componentes de dados
-    %% Laranja (#F5A623): Componentes de infraestrutura
+    %% ESTILOS
     %% ===========================================================
-
-    %% Infraestrutura (laranja)
-    style EDGE fill:#FFF3E0,stroke:#F5A623,stroke-width:2px,color:#333
-    style LB_LAYER fill:#FFF3E0,stroke:#F5A623,stroke-width:2px,color:#333
-    style CDN fill:#F5A623,stroke:#E09100,color:#fff
-    style DNS fill:#F5A623,stroke:#E09100,color:#fff
-    style LB fill:#F5A623,stroke:#E09100,color:#fff
-    style SSL fill:#F5A623,stroke:#E09100,color:#fff
-    style AUTOSCALER fill:#F5A623,stroke:#E09100,color:#fff
-
-    %% Aplicação (azul)
-    style APP_TIER fill:#E3F2FD,stroke:#438DD5,stroke-width:2px,color:#333
-    style APP_GROUP_1 fill:#BBDEFB,stroke:#438DD5,stroke-width:1px,color:#333
-    style APP_GROUP_2 fill:#BBDEFB,stroke:#438DD5,stroke-width:1px,color:#333
-    style APP1 fill:#438DD5,stroke:#2B6CB0,color:#fff
-    style APP2 fill:#438DD5,stroke:#2B6CB0,color:#fff
-    style APP3 fill:#438DD5,stroke:#2B6CB0,color:#fff
-    style APP4 fill:#438DD5,stroke:#2B6CB0,color:#fff
-
-    %% Cache (azul/verde)
-    style CACHE_TIER fill:#E8F5E9,stroke:#67BE4B,stroke-width:2px,color:#333
-    style CACHE_PRIMARY fill:#67BE4B,stroke:#4A9A35,color:#fff
-    style CACHE_REPLICA fill:#A5D6A7,stroke:#4A9A35,color:#333
-
-    %% Dados (verde)
-    style DATA_TIER fill:#E8F5E9,stroke:#67BE4B,stroke-width:2px,color:#333
-    style DB_CLUSTER fill:#C8E6C9,stroke:#67BE4B,stroke-width:1px,color:#333
-    style DB_PRIMARY fill:#67BE4B,stroke:#4A9A35,color:#fff
-    style DB_REPLICA1 fill:#A5D6A7,stroke:#4A9A35,color:#333
-    style DB_REPLICA2 fill:#A5D6A7,stroke:#4A9A35,color:#333
-    style BACKUP fill:#A5D6A7,stroke:#4A9A35,color:#333
-
-    %% Fila + Workers (laranja/azul)
-    style ASYNC_TIER fill:#FFF3E0,stroke:#F5A623,stroke-width:2px,color:#333
-    style WORKERS fill:#E3F2FD,stroke:#438DD5,stroke-width:1px,color:#333
-    style QUEUE fill:#F5A623,stroke:#E09100,color:#fff
-    style WORKER1 fill:#438DD5,stroke:#2B6CB0,color:#fff
-    style WORKER2 fill:#438DD5,stroke:#2B6CB0,color:#fff
-    style DLQ fill:#FFCDD2,stroke:#E53935,color:#333
+    style SERVER fill:#E3F2FD,stroke:#438DD5,stroke-width:2px,color:#333
+    style APP fill:#E3F2FD,stroke:#438DD5,stroke-width:1px,color:#333
+    style CLI fill:#438DD5,stroke:#2B6CB0,color:#fff
+    style Runtime fill:#438DD5,stroke:#2B6CB0,color:#fff
+    style Engines fill:#438DD5,stroke:#2B6CB0,color:#fff
+    style STORAGE fill:#E8F5E9,stroke:#67BE4B,stroke-width:1px,color:#333
+    style Videos fill:#67BE4B,stroke:#4A9A35,color:#fff
+    style Thumbnails fill:#67BE4B,stroke:#4A9A35,color:#fff
+    style Assets fill:#67BE4B,stroke:#4A9A35,color:#fff
+    style DB fill:#67BE4B,stroke:#4A9A35,color:#fff
+    style SCHEDULER fill:#FFF3E0,stroke:#F5A623,stroke-width:2px,color:#333
+    style Cron fill:#F5A623,stroke:#E09100,color:#fff
+    style EXTERNALS fill:#FFF3E0,stroke:#F5A623,stroke-width:1px,color:#333
+    style OpenRouter fill:#999999,stroke:#6b6b6b,color:#fff
+    style ElevenLabs fill:#999999,stroke:#6b6b6b,color:#fff
+    style Pexels fill:#999999,stroke:#6b6b6b,color:#fff
+    style FFmpeg fill:#999999,stroke:#6b6b6b,color:#fff
+    style YouTubeData fill:#999999,stroke:#6b6b6b,color:#fff
+    style YouTubeAnalytics fill:#999999,stroke:#6b6b6b,color:#fff
+    style DALLE fill:#999999,stroke:#6b6b6b,color:#fff

@@ -1,149 +1,152 @@
-%% C4 Nivel 3: Diagrama de Componentes — {{Nome do Container}}
-%% Mostra os componentes internos de um unico container
-%% Referencia: docs/blueprint/01-architecture.md
-%%
-%% IMPORTANTE: Duplique este arquivo para cada container.
-%% Renomeie para {{container}}-components.mmd
-%% Exemplo: web-app-components.mmd, worker-components.mmd
-%%
-%% Perguntas orientadoras:
-%% - Quais sao os principais modulos/camadas dentro deste container?
-%% - Como as requisicoes entram? (Controllers, Handlers, Resolvers)
-%% - Onde ficam as regras de negocio? (Services, Use Cases, Domain)
-%% - Como o container acessa dados? (Repositories, DAOs, ORMs)
-%% - Quais integracoes externas este container faz diretamente?
-%% - Existe algum middleware ou camada transversal (auth, logging, cache)?
+%% ============================================================
+%% Componentes Internos — Mestra AI
+%% Referência: docs/blueprint/06-system-architecture.md
+%% ============================================================
+%% Como o Mestra CLI e o Pipeline Orchestrator são organizados internamente
 
-graph TB
-    %% -------------------------------------------------------
-    %% Entrada de Requisicoes
-    %% Quais controllers/rotas recebem chamadas externas?
-    %% Liste os principais agrupamentos de endpoints.
-    %% -------------------------------------------------------
-    subgraph ContainerBoundary["⚙️ {{Nome do Container}} — Componentes Internos"]
-        direction TB
+classDiagram
+    direction TB
 
-        subgraph EntryLayer["Camada de Entrada"]
-            direction LR
-            RouterA["🔀 {{Controller/Rota A}}<br/>{{responsabilidade}}<br/>{{ex: REST /users}}"]
-            RouterB["🔀 {{Controller/Rota B}}<br/>{{responsabilidade}}<br/>{{ex: REST /orders}}"]
-            RouterC["🔀 {{Controller/Rota C}}<br/>{{responsabilidade}}<br/>{{ex: REST /payments}}"]
-        end
+    %% --- Entry Point ---
+    class CLI {
+        +run(command, options) void
+        +parseArgs() Command
+    }
 
-        %% ---------------------------------------------------
-        %% Middleware / Camada Transversal
-        %% Existe autenticacao, rate limiting, validacao global?
-        %% ---------------------------------------------------
-        Middleware["🛡️ {{Middleware}}<br/>{{ex: Auth, Validation, Rate Limit}}"]
+    %% --- Pipeline Core ---
+    class PipelineOrchestrator {
+        +execute(context) PipelineContext
+        +executeStep(step, context) PipelineContext
+        +retry(step, context) PipelineContext
+        +persistState(context) void
+    }
 
-        %% ---------------------------------------------------
-        %% Camada de Servicos / Casos de Uso
-        %% Onde mora a logica de negocio?
-        %% Cada servico encapsula um conjunto de regras.
-        %% ---------------------------------------------------
-        subgraph ServiceLayer["Camada de Servicos / Casos de Uso"]
-            direction LR
-            ServiceA["📋 {{Servico/UseCase A}}<br/>{{responsabilidade}}<br/>{{ex: Gerenciar Usuarios}}"]
-            ServiceB["📋 {{Servico/UseCase B}}<br/>{{responsabilidade}}<br/>{{ex: Processar Pedidos}}"]
-            ServiceC["📋 {{Servico/UseCase C}}<br/>{{responsabilidade}}<br/>{{ex: Processar Pagamentos}}"]
-        end
+    class PipelineContext {
+        +id: string
+        +niche: string
+        +status: string
+        +contentPlan: ContentPlan
+        +idea: Idea
+        +script: Script
+        +scenes: Scene[]
+        +videoPath: string
+        +thumbnailPath: string
+        +metrics: VideoMetrics
+    }
 
-        %% ---------------------------------------------------
-        %% Camada de Acesso a Dados
-        %% Como os servicos persistem e consultam dados?
-        %% Repositorios abstraem o banco de dados.
-        %% ---------------------------------------------------
-        subgraph DataLayer["Camada de Acesso a Dados"]
-            direction LR
-            RepoA["🗃️ {{Repositorio A}}<br/>{{responsabilidade}}<br/>{{ex: UserRepository}}"]
-            RepoB["🗃️ {{Repositorio B}}<br/>{{responsabilidade}}<br/>{{ex: OrderRepository}}"]
-            RepoC["🗃️ {{Repositorio C}}<br/>{{responsabilidade}}<br/>{{ex: PaymentRepository}}"]
-        end
+    %% --- Engines ---
+    class ContentEngine {
+        +generateIdea(niche, directive) Idea
+        +generateScriptFromTemplate(idea, template) Script
+        +generateHookVariants(idea) Hook[]
+        +selectBestHook(hooks) Hook
+    }
 
-        %% ---------------------------------------------------
-        %% Integradores Externos
-        %% Quais clientes HTTP/gRPC este container usa?
-        %% Cada integrador encapsula a comunicacao com um sistema externo.
-        %% ---------------------------------------------------
-        subgraph IntegrationLayer["Camada de Integracoes"]
-            direction LR
-            ClientA["🔌 {{Client/Adapter A}}<br/>{{ex: PaymentGatewayClient}}"]
-            ClientB["🔌 {{Client/Adapter B}}<br/>{{ex: EmailServiceClient}}"]
-        end
-    end
+    class SceneEngine {
+        +splitIntoScenes(script) Scene[]
+        +estimateDurations(scenes) Scene[]
+        +generateVisualQueries(scene) string
+    }
 
-    %% -------------------------------------------------------
-    %% Dependencias Externas ao Container
-    %% Estes elementos vem do diagrama de containers (Nivel 2).
-    %% -------------------------------------------------------
-    DB[("🗄️ {{Banco de Dados}}<br/>{{tecnologia}}")]
-    Cache[("⚡ {{Cache}}<br/>{{tecnologia}}")]
-    ExtA["📦 {{Sistema Externo 1}}<br/>{{funcao}}"]
-    ExtB["📦 {{Sistema Externo 2}}<br/>{{funcao}}"]
+    class VoiceEngine {
+        +generateVoice(scene) AudioSegment
+        +applyVoiceStyle(segment, profile) AudioSegment
+        +mergeAudioSegments(segments) AudioSegment
+    }
 
-    %% -------------------------------------------------------
-    %% Fluxo Interno — Entrada para Middleware
-    %% -------------------------------------------------------
-    RouterA --> Middleware
-    RouterB --> Middleware
-    RouterC --> Middleware
+    class VisualEngine {
+        +searchClips(query) Clip[]
+        +rankClips(clips, scene) Clip[]
+        +downloadMedia(clip) string
+    }
 
-    %% -------------------------------------------------------
-    %% Fluxo Interno — Middleware para Servicos
-    %% Qual servico cada controller aciona?
-    %% -------------------------------------------------------
-    Middleware --> ServiceA
-    Middleware --> ServiceB
-    Middleware --> ServiceC
+    class PacingEngine {
+        +enforceMaxSceneDuration(scenes) Scene[]
+        +addPatternInterrupts(scenes) Scene[]
+        +applyZoomEffects(scenes) Scene[]
+        +addMicroTransitions(scenes) Scene[]
+    }
 
-    %% -------------------------------------------------------
-    %% Fluxo Interno — Servicos para Repositorios
-    %% Quais repositorios cada servico utiliza?
-    %% -------------------------------------------------------
-    ServiceA --> RepoA
-    ServiceB --> RepoB
-    ServiceC --> RepoC
+    class RenderingEngine {
+        +composeScene(scene) string
+        +syncAudioVideo(scene) string
+        +stitchScenes(scenes) string
+        +addSubtitles(videoPath, scenes) string
+        +addBackgroundMusic(videoPath) string
+    }
 
-    %% -------------------------------------------------------
-    %% Fluxo Interno — Servicos para Integracoes
-    %% Quais servicos precisam chamar sistemas externos?
-    %% -------------------------------------------------------
-    ServiceC --> ClientA
-    ServiceB --> ClientB
+    class ThumbnailEngine {
+        +generateThumbnailConcepts(idea) string[]
+        +generateMultipleImages(concepts) Image[]
+        +composeThumbnail(image, text) string
+        +scoreThumbnailCTR(thumbnail) number
+        +selectBestThumbnail(thumbnails) Thumbnail
+    }
 
-    %% -------------------------------------------------------
-    %% Conexoes Externas
-    %% Como os componentes se conectam a recursos fora do container?
-    %% -------------------------------------------------------
-    RepoA -->|"{{protocolo, ex: TCP/SQL}}"| DB
-    RepoB -->|"{{protocolo, ex: TCP/SQL}}"| DB
-    RepoC -->|"{{protocolo, ex: TCP/SQL}}"| DB
-    ServiceA -->|"{{protocolo, ex: TCP}}"| Cache
-    ClientA -->|"{{protocolo, ex: HTTPS}}"| ExtA
-    ClientB -->|"{{protocolo, ex: HTTPS}}"| ExtB
+    class PerformanceEngine {
+        +collectMetrics(videoId) VideoMetrics
+        +getRetentionCurve(metrics) RetentionCurve
+        +detectDropOffPoints(metrics) number[]
+        +scoreVideoPerformance(metrics) number
+    }
 
-    %% -------------------------------------------------------
-    %% Estilos C4
-    %% Azul claro = componentes | Azul medio = container | Cinza = externo
-    %% -------------------------------------------------------
-    style ContainerBoundary fill:none,stroke:#2e6295,stroke-width:2px,stroke-dasharray:5 5,color:#2e6295
-    style EntryLayer fill:none,stroke:#438dd5,stroke-width:1px,color:#438dd5
-    style ServiceLayer fill:none,stroke:#438dd5,stroke-width:1px,color:#438dd5
-    style DataLayer fill:none,stroke:#438dd5,stroke-width:1px,color:#438dd5
-    style IntegrationLayer fill:none,stroke:#438dd5,stroke-width:1px,color:#438dd5
-    style RouterA fill:#85bbf0,stroke:#5a9bd5,color:#000
-    style RouterB fill:#85bbf0,stroke:#5a9bd5,color:#000
-    style RouterC fill:#85bbf0,stroke:#5a9bd5,color:#000
-    style Middleware fill:#85bbf0,stroke:#5a9bd5,color:#000
-    style ServiceA fill:#85bbf0,stroke:#5a9bd5,color:#000
-    style ServiceB fill:#85bbf0,stroke:#5a9bd5,color:#000
-    style ServiceC fill:#85bbf0,stroke:#5a9bd5,color:#000
-    style RepoA fill:#85bbf0,stroke:#5a9bd5,color:#000
-    style RepoB fill:#85bbf0,stroke:#5a9bd5,color:#000
-    style RepoC fill:#85bbf0,stroke:#5a9bd5,color:#000
-    style ClientA fill:#85bbf0,stroke:#5a9bd5,color:#000
-    style ClientB fill:#85bbf0,stroke:#5a9bd5,color:#000
-    style DB fill:#438dd5,stroke:#2e6295,color:#fff
-    style Cache fill:#438dd5,stroke:#2e6295,color:#fff
-    style ExtA fill:#999999,stroke:#6b6b6b,color:#fff
-    style ExtB fill:#999999,stroke:#6b6b6b,color:#fff
+    class StrategyEngine {
+        +generateContentPlan(niche, metrics) ContentPlan
+        +clusterTopics(topics) TopicCluster[]
+        +prioritizeIdeas(ideas) Idea[]
+        +createSeries(topic) Series
+    }
+
+    class LearningEngine {
+        +analyzeFailures(metrics[]) LearningAnalysis
+        +updatePromptWeights(analysis) Weights
+        +adjustHookStrategy(weights) HookStrategy
+        +optimizeTemplates(analysis) TemplateConfig
+    }
+
+    %% --- Upload ---
+    class UploadModule {
+        +generateTitle(idea) string
+        +generateDescription(script) string
+        +generateTags(idea, script) string[]
+        +uploadToYoutube(video, thumbnail, metadata) string
+    }
+
+    %% --- Database ---
+    class DatabaseClient {
+        +savePipeline(context) Pipeline
+        +getPipeline(id) Pipeline
+        +updatePipelineStatus(id, status) void
+        +saveMetrics(metrics) VideoMetrics
+        +getLearningState(niche) LearningState
+        +updateLearningState(state) void
+    }
+
+    %% --- Relationships ---
+    CLI --> PipelineOrchestrator : "run()"
+
+    PipelineOrchestrator --> PipelineContext : "mantém estado"
+    PipelineOrchestrator --> DatabaseClient : "persiste"
+
+    PipelineOrchestrator --> ContentEngine : "gera conteúdo"
+    PipelineOrchestrator --> SceneEngine : "segmenta"
+    PipelineOrchestrator --> VoiceEngine : "áudio"
+    PipelineOrchestrator --> VisualEngine : "visuais"
+    PipelineOrchestrator --> PacingEngine : "ritmo"
+    PipelineOrchestrator --> RenderingEngine : "renderiza"
+    PipelineOrchestrator --> ThumbnailEngine : "thumbnail"
+    PipelineOrchestrator --> UploadModule : "upload"
+    PipelineOrchestrator --> PerformanceEngine : "métricas"
+
+    ContentEngine --> StrategyEngine : "recebe diretiva"
+    ContentEngine --> LearningEngine : "recebe pesos"
+    PerformanceEngine --> LearningEngine : "fornece dados"
+    LearningEngine --> StrategyEngine : "atualiza"
+
+    UploadModule --> YouTubeDataAPI : "HTTP"
+    VoiceEngine --> ElevenLabsAPI : "HTTP"
+    VisualEngine --> PexelsAPI : "HTTP"
+    ContentEngine --> OpenRouterAPI : "HTTP"
+    RenderingEngine --> FFmpeg : "CLI"
+    ThumbnailEngine --> DALLEAPI : "HTTP"
+    PerformanceEngine --> YouTubeAnalyticsAPI : "HTTP"

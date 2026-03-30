@@ -1,0 +1,56 @@
+%% ============================================================
+%% Fluxo 2: Coleta de Métricas do YouTube
+%% Referência: docs/blueprint/07-critical_flows.md
+%% ============================================================
+
+sequenceDiagram
+    autonumber
+
+    participant Cron as Cron<br/>Scheduler
+    participant PE as Performance<br/>Engine
+    participant DB as Banco de<br/>Dados
+    participant YouTube as YouTube<br/>Analytics API
+
+    %% 1. Dispara coleta
+    Cron->>+PE: collectMetrics()
+
+    %% 2. Busca vídeos publicados
+    PE->>+DB: getPublishedVideos(days: 7)
+    DB-->>-PE: Video[]
+
+    %% 3. Para cada vídeo
+    loop Para cada video
+        PE->>+YouTube: GET /reports?ids=channel==UCxxx&metrics=views,likes,comments,annotationClickThroughRate,annotationImpressions,averageViewDuration,averageViewPercentage
+        alt Sucesso
+            YouTube-->>-PE: Metrics JSON
+        else Rate limit
+            YouTube-->>-PE: 429 Too Many Requests
+            PE->>+PE: backoff(seconds: 60)
+            PE->>+YouTube: RETRY
+        else Dados não disponíveis (< 48h)
+            YouTube-->>-PE: 204 No Content
+            Note over PE: Pula video; marca para retry
+        end
+
+        %% 4. Detecta drop-off points
+        PE->>+YouTube: GET /reports?metrics=audienceWatchRate
+        YouTube-->>-PE: retentionCurve[]
+
+        %% 5. Calcula score
+        PE->>+PE: scoreVideoPerformance(metrics)
+        PE-->>-PE: performanceScore
+
+        %% 6. Persiste
+        PE->>+DB: saveVideoMetrics(metrics)
+        DB-->>-PE: OK
+    end
+
+    PE-->>-Cron: collected: N videos
+
+    %% Erros
+    alt DB indisponível
+        Note over PE: Mantem metricas em memoria<br/>Retry quando DB disponivel
+    end
+
+    %% Performance
+    Note over PE: Meta: < 5s por video<br/>100+ videos/hora

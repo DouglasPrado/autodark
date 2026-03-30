@@ -1,175 +1,206 @@
-# 13. Seguranca
+# 13. Segurança
 
-> Seguranca nao e uma feature — e uma propriedade do sistema. Documente como o sistema se protege.
+> Segurança não é uma feature — é uma propriedade do sistema. Documente como o sistema se protege.
 
 ---
 
-## 13.1 Modelo de Ameacas
+## 13.1 Modelo de Ameaças
 
-> Quais sao as principais ameacas ao sistema? Considere: Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, Elevation of Privilege.
+> Quais são as principais ameaças ao sistema? Considere: Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, Elevation of Privilege.
 
-Utilizamos uma abordagem simplificada baseada no modelo **STRIDE** para identificar e mitigar ameacas.
+Utilizamos uma abordagem simplificada baseada no modelo **STRIDE** para identificar e mitigar ameaças.
 
-| Ameaca | Categoria (STRIDE) | Impacto | Mitigacao |
+| Ameaça | Categoria (STRIDE) | Impacto | Mitigação |
 |--------|---------------------|---------|-----------|
-| {{ameaca_1}} | {{categoria_stride}} | {{impacto_1}} | {{mitigacao_1}} |
-| {{ameaca_2}} | {{categoria_stride}} | {{impacto_2}} | {{mitigacao_2}} |
-| {{ameaca_3}} | {{categoria_stride}} | {{impacto_3}} | {{mitigacao_3}} |
+| Vazamento de API keys | I (Information Disclosure) | Alto | Keys em variáveis de ambiente, nunca no código |
+| Acesso não autorizado ao YouTube | E (Elevation of Privilege) | Alto | OAuth2 com escopo mínimo |
+| Adulteração de estado do pipeline | T (Tampering) | Médio | PipelineContext imutável, persistência validada |
+| Uso indevido de credenciais | S (Spoofing) | Alto | Validação de presença de env vars ao iniciar |
+| Exposição de dados de métricas | I (Information Disclosure) | Baixo | Dados são públicos (YouTube) |
+| DoS por rate limit | D (Denial of Service) | Médio | Retry com backoff, rate limiting nas APIs |
+| Execução de comandos maliciosos | E (Elevation of Privilege) | Alto | Sem exec de input externo; apenas CLI local |
 
 <!-- APPEND:threats -->
 
 **Legenda STRIDE:**
 
-- **S** — Spoofing (falsificacao de identidade)
-- **T** — Tampering (adulteracao de dados)
-- **R** — Repudiation (negacao de autoria)
-- **I** — Information Disclosure (vazamento de informacoes)
-- **D** — Denial of Service (negacao de servico)
-- **E** — Elevation of Privilege (escalacao de privilegios)
+- **S** — Spoofing (falsificação de identidade)
+- **T** — Tampering (adulteração de dados)
+- **R** — Repudiation (negação de autoria)
+- **I** — Information Disclosure (vazamento de informações)
+- **D** — Denial of Service (negação de serviço)
+- **E** — Elevation of Privilege (escalação de privilégios)
 
 ---
 
-## 13.2 Autenticacao
+## 13.2 Autenticação
 
-> Como os usuarios provam quem sao? OAuth, JWT, API keys, SSO?
+> Como os usuários provam quem são? OAuth, JWT, API keys, SSO?
 
-A autenticacao define como usuarios e sistemas comprovam sua identidade antes de acessar recursos protegidos.
+Sistema de uso interno via CLI. Autenticação é primariamente com serviços externos.
 
-- **Metodo:** {{metodo_autenticacao}} (ex.: OAuth 2.0, JWT, API Keys, SSO, MFA)
-- **Provedor:** {{provedor_autenticacao}} (ex.: Auth0, Keycloak, Cognito, implementacao propria)
-- **Fluxo:** {{fluxo_autenticacao}} (ex.: Authorization Code + PKCE, Client Credentials, Resource Owner Password)
+- **Método:** API Keys para serviços externos; OAuth2 para YouTube
+- **Provedor:** YouTube (OAuth2), OpenRouter (API Key), ElevenLabs (API Key), Pexels (API Key)
+- **Fluxo:** Client Credentials para APIs; OAuth2 Authorization Code para YouTube
 
-### Fluxo de Autenticacao
+### Fluxo de Autenticação
 
 ```
-{{diagrama_fluxo_autenticacao}}
+Operador (CLI)
+      │
+      ▼
+Variáveis de ambiente validadas
+      │
+      ├── API Keys presentes? ──► Iniciar
+      │
+      └── API Keys ausentes? ──► Falhar com erro claro
+      
+YouTube OAuth2:
+      │
+      ▼
+Browser abre auth URL
+      │
+      ▼
+Usuário aprova acesso
+      │
+      ▼
+Token retornado (access + refresh)
+      │
+      ▼
+Armazenar token (arquivo local encriptado)
 ```
 
-### Politicas de Credenciais
+### Políticas de Credenciais
 
-- Complexidade de senha: {{politica_senha}}
-- Expiracao de tokens: {{expiracao_token}}
-- Refresh tokens: {{politica_refresh_token}}
-- Tentativas de login: {{limite_tentativas_login}}
-- MFA: {{politica_mfa}}
+- **Armazenamento:** Variáveis de ambiente (`.env` não versionado)
+- **Validação:** Ao iniciar, verificar se todas as Required vars estão presentes
+- **OAuth2 YouTube:** Refresh token automático
+- **MFA:** Não aplicável (ferramenta interna, operador único)
 
 ---
 
-## 13.3 Autorizacao
+## 13.3 Autorização
 
-> Como o sistema decide o que cada usuario pode fazer? RBAC, ABAC, ACL?
+> Como o sistema decide o que cada usuário pode fazer? RBAC, ABAC, ACL?
 
-- **Modelo:** {{modelo_autorizacao}} (ex.: RBAC, ABAC, ACL, Policy-based)
+Sistema de operador único. Não há múltiplos usuários.
 
-### Roles e Permissoes
+- **Modelo:** Operador único (não há separação de roles)
+- **Controle de acesso:** Apenas quem tem acesso ao servidor/ambiente pode executar
 
-| Role | Descricao | Permissoes |
+### Roles e Permissões
+
+| Role | Descrição | Permissões |
 |------|-----------|------------|
-| {{role_1}} | {{descricao_role_1}} | {{permissoes_role_1}} |
-| {{role_2}} | {{descricao_role_2}} | {{permissoes_role_2}} |
-| {{role_3}} | {{descricao_role_3}} | {{permissoes_role_3}} |
-
-<!-- APPEND:roles -->
+| Operador | Usuário único do sistema | Todas: executar pipeline, ver status, configurar |
 
 ### Regras de Acesso
 
-- Principio do menor privilegio: {{como_aplicado}}
-- Segregacao de funcoes: {{segregacao}}
-- Revisao periodica de acessos: {{frequencia_revisao}}
+- **Princípio do menor privilégio:** Aplicado às APIs externas (apenas escopos necessários)
+- **Segregação de funções:** Não aplicável (operador único)
+- **Acesso ao servidor:** Controle via sistema operacional
 
 ---
 
-## 13.4 Protecao de Dados
+## 13.4 Proteção de Dados
 
-> Quais dados sao sensiveis e como sao protegidos?
+> Quais dados são sensíveis e como são protegidos?
 
-### Dados em Transito
+### Dados em Trânsito
 
-- **Protocolo:** {{protocolo_transito}} (ex.: TLS 1.3, mTLS)
-- **Certificate Pinning:** {{certificate_pinning}} (sim/nao, onde aplicado)
-- **Cifras permitidas:** {{cifras_permitidas}}
-- **HSTS:** {{hsts_configuracao}}
+- **Protocolo:** HTTPS para todas as APIs externas
+- **Certificate Pinning:** Não implementado (APIs públicas)
+- **TLS:** 1.2+ para todas as conexões
 
 ### Dados em Repouso
 
-- **Criptografia:** {{criptografia_repouso}} (ex.: AES-256, algoritmo utilizado)
-- **Gerenciamento de chaves:** {{gerenciamento_chaves}} (ex.: AWS KMS, HashiCorp Vault)
-- **Backups criptografados:** {{backups_criptografados}} (sim/nao)
+- **Criptografia:** PostgreSQL com criptografia nativa (se disponível no provider)
+- **Gerenciamento de chaves:** Variáveis de ambiente
+- **Backups criptografados:** Configuração do provedor PostgreSQL
+- **Arquivos locais:** Vídeos/thumbnails em disco local (não sensíveis)
 
-### Dados Sensiveis (PII)
+### Dados Sensíveis (PII)
 
-| Dado | Classificacao | Protecao | Retencao |
+| Dado | Classificação | Proteção | Retenção |
 |------|---------------|----------|----------|
-| {{dado_sensivel_1}} | {{classificacao_1}} | {{protecao_1}} | {{retencao_1}} |
-| {{dado_sensivel_2}} | {{classificacao_2}} | {{protecao_2}} | {{retencao_2}} |
-| {{dado_sensivel_3}} | {{classificacao_3}} | {{protecao_3}} | {{retencao_3}} |
+| API Keys | Secreto | Variáveis de ambiente, nunca versionado | Durante uso |
+| OAuth Tokens | Secreto | Arquivo local com permissões restritas | Durante uso |
+| Logs de execução | Interno | Arquivos locais | 30 dias |
+| Métricas de vídeo | Público | YouTube Analytics (já público) | Ilimitado |
 
-- **Mascaramento/Anonimizacao:** {{estrategia_mascaramento}}
-- **Tokenizacao:** {{estrategia_tokenizacao}}
-- **Politica de descarte:** {{politica_descarte}}
+### Dados do Sistema
+
+- **PipelineContext:** Armazenado em banco SQLite/PostgreSQL
+- **LearningState:** Armazenado em banco
+- **VideoMetrics:** Armazenado em banco
 
 ---
 
-## 13.5 Checklist de Seguranca
+## 13.5 Checklist de Segurança
 
-Checklist inspirado no **OWASP Top 10** para validacao continua da postura de seguranca do sistema.
+Checklist inspirado no **OWASP Top 10** para validação contínua da postura de segurança do sistema.
 
-- [ ] **Prevencao de Injection** — queries parametrizadas, validacao de entrada, ORM seguro
-- [ ] **Autenticacao e Gerenciamento de Sessao** — sessoes seguras, expiracao adequada, protecao contra brute force
-- [ ] **Exposicao de Dados Sensiveis** — criptografia aplicada, headers de seguranca, sem dados sensiveis em logs
-- [ ] **Controle de Acesso** — verificacao em cada endpoint, principio do menor privilegio, testes de autorizacao
-- [ ] **Configuracao de Seguranca** — headers HTTP seguros, CORS configurado, ambientes hardened
-- [ ] **Cross-Site Scripting (XSS)** — sanitizacao de saida, Content Security Policy (CSP), encoding contextual
-- [ ] **Cross-Site Request Forgery (CSRF)** — tokens CSRF, SameSite cookies, validacao de origin
-- [ ] **Vulnerabilidades em Dependencias** — scanning automatizado (Dependabot, Snyk), atualizacoes regulares, SBOM
-
-<!-- APPEND:security-checklist -->
+- [x] **Prevenção de Injection** — Queries via Prisma ORM (parametrizadas)
+- [x] **Autenticação e Gerenciamento de Sessão** — API keys, OAuth2 para YouTube
+- [x] **Exposição de Dados Sensíveis** — API keys em variáveis de ambiente
+- [x] **Controle de Acesso** — Operador único, validação de env vars
+- [x] **Configuração de Segurança** — Headers não aplicáveis (CLI sem HTTP server)
+- [x] **Cross-Site Scripting (XSS)** — Não aplicável (sem UI)
+- [x] **Cross-Site Request Forgery (CSRF)** — Não aplicável (sem UI)
+- [x] **Vulnerabilidades em Dependências** — Dependabot enabled, npm audit
 
 ### Status Atual
 
-| Item | Status | Responsavel | Observacoes |
+| Item | Status | Responsável | Observações |
 |------|--------|-------------|-------------|
-| {{item_checklist_1}} | {{status_1}} | {{responsavel_1}} | {{observacoes_1}} |
-| {{item_checklist_2}} | {{status_2}} | {{responsavel_2}} | {{observacoes_2}} |
+| API Keys em env vars | Concluído | Douglas | Nunca versionar .env |
+| OAuth2 YouTube | Concluído | Douglas | Refresh automático |
+| Dependabot | Concluído | Douglas | Ativo no repositório |
+| Logs sem dados sensíveis | Concluído | Douglas | Verificar antes de log |
+| Validação de env vars ao iniciar | Concluído | Douglas | Fail fast |
 
 ---
 
 ## 13.6 Auditoria e Compliance
 
-> Quais regulamentacoes o sistema precisa atender? LGPD, SOC2, PCI-DSS?
+> Quais regulamentações o sistema precisa atender? LGPD, SOC2, PCI-DSS?
 
-### Regulamentacoes Aplicaveis
+### Regulamentações Aplicáveis
 
-- {{regulamentacao_1}} (ex.: LGPD, GDPR, SOC2, PCI-DSS, HIPAA, ISO 27001)
-- {{regulamentacao_2}}
-- {{regulamentacao_3}}
+- **LGPD:** Não aplicável — ferramenta interna, dados são do operador (YouTube)
+- **SOC2:** Não aplicável — não é SaaS
+- **PCI-DSS:** Não aplicável — sem dados de pagamento
 
 ### Logging de Auditoria
 
-- **Eventos auditados:** {{eventos_auditados}} (ex.: login, alteracao de dados, acesso a PII, alteracoes de permissao)
-- **Formato do log:** {{formato_log}} (ex.: JSON estruturado, CEF)
-- **Destino:** {{destino_logs}} (ex.: SIEM, CloudWatch, ELK Stack)
-- **Imutabilidade:** {{imutabilidade_logs}} (ex.: write-once storage, assinatura digital)
+- **Eventos auditados:**
+  - Início e fim de cada pipeline
+  - Falhas de step
+  - Tentativas de upload
+  - Execuções de learning loop
+- **Formato do log:** JSON estruturado (conforme RFC 5424)
+- **Destino:** Arquivo local (`logs/`) + stdout
 
-### Retencao
+### Retenção
 
-| Tipo de Log | Periodo de Retencao | Armazenamento | Justificativa |
+| Tipo de Log | Período de Retenção | Armazenamento | Justificativa |
 |-------------|---------------------|---------------|---------------|
-| {{tipo_log_1}} | {{retencao_1}} | {{armazenamento_1}} | {{justificativa_1}} |
-| {{tipo_log_2}} | {{retencao_2}} | {{armazenamento_2}} | {{justificativa_2}} |
+| Execuções de pipeline | 30 dias | Arquivo local | Debugging |
+| Erros e exceções | 30 dias | Arquivo local | Análise de incidentes |
+| Métricas de vídeo | Ilimitado | Banco | Histórico de performance |
 
 ### Resposta a Incidentes
 
-- **Plano de resposta:** {{plano_resposta_incidentes}}
-- **Equipe responsavel:** {{equipe_seguranca}}
-- **SLA de notificacao:** {{sla_notificacao}} (ex.: 72h para LGPD)
-- **Runbook:** {{link_runbook}}
+- **Plano de resposta:** Investigação via logs locais
+- **Equipe responsável:** Operador (único usuário)
+- **SLA de notificação:** Não aplicável
+- **Runbook:** Docs em README.md
 
 ---
 
-## Referencias
+## Referências
 
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
 - [STRIDE Threat Model](https://learn.microsoft.com/en-us/azure/security/develop/threat-modeling-tool-threats)
-- [LGPD](https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm)
-- {{referencia_adicional}}
+- [Prisma Security](https://www.prisma.io/docs/guides/security)
+- [YouTube Data API - Authentication](https://developers.google.com/youtube/v3/guides/auth)

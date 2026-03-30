@@ -1,0 +1,31 @@
+%% ============================================================
+%% Máquina de Estados: VideoMetrics
+%% Referência: docs/blueprint/09-state-models.md
+%% ============================================================
+
+stateDiagram-v2
+    direction TB
+
+    [*] --> pending
+
+    %% Estados
+    pending : Métricas<br/>solicitadas
+    collected : Métricas<br/>obtidas
+    failed : Falha ao<br/>coletar
+
+    %% Transições
+    pending --> collected : API retorna OK
+    pending --> failed : API erro
+    failed --> pending : Retry
+
+    %% Estado terminal
+    collected --> [*]
+
+    %% Notas
+    note right of pending
+        Aguardando<br/>YouTube Analytics
+    end note
+
+    note right of collected
+        Estado terminal<br/> retention, ctr,<br/>views, likes
+    end note

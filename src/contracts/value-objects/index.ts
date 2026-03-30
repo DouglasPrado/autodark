@@ -1,0 +1,5 @@
+export type { VideoMetadata } from './video-metadata.js'
+export type { PacingConfig } from './pacing-config.js'
+export type { TargetMetrics } from './target-metrics.js'
+export type { HookWeights } from './hook-weights.js'
+export type { RetentionCurve } from './retention-curve.js'

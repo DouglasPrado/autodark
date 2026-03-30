@@ -1,0 +1,52 @@
+%% ============================================================
+%% Fluxo 4: Retry de Step com Persistência
+%% Referência: docs/blueprint/07-critical_flows.md
+%% ============================================================
+
+sequenceDiagram
+    autonumber
+
+    participant PO as Pipeline<br/>Orchestrator
+    participant Engine as Engine<br/>(qualquer)
+    participant DB as Banco de<br/>Dados
+
+    %% 1. Executa step
+    PO->>+Engine: executeStep(stepName, context)
+    
+    %% 2. Step falha
+    Engine-->>-PO: Error: timeout
+
+    %% 3. Incrementa contador
+    PO->>+PO: incrementRetryCount(stepName)
+
+    %% 4. Verifica tentativas
+    alt retryCount < 3
+        %% 5. Backoff
+        Note over PO: Backoff: 1s, 2s, 4s
+        
+        %% 6. Persiste estado
+        PO->>+DB: savePipelineState(context)
+        DB-->>-PO: OK
+
+        %% 7. Retry
+        PO->>+Engine: executeStep(stepName, context)
+        
+        alt Sucesso
+            Engine-->>-PO: result
+            Note over PO: Step concluido<br/>Continua pipeline
+        else Falha novamente
+            Note over PO: Volta para step 3<br/>retryCount++
+        end
+
+    else retryCount >= 3
+        %% 8. Marca falha final
+        PO->>+DB: updatePipelineStatus(id, "failed")
+        DB-->>-PO: OK
+
+        PO-->>-PO: Pipeline failed
+        Note over PO: Operador pode<br/>reexecutar via CLI
+    end
+
+    %% Resumo
+    Note over PO: Max 3 tentativas<br/>Persiste apos cada step
+    Note over DB: Estado permite resume<br/>de ponto de falha

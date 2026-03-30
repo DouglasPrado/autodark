@@ -1,0 +1,137 @@
+%% ============================================================
+%% Fluxo 1: Geração e Publicação de Vídeo
+%% Referência: docs/blueprint/07-critical_flows.md
+%% ============================================================
+
+sequenceDiagram
+    autonumber
+
+    actor Operator as Operador
+    
+    participant CLI as CLI<br/>Node.js
+    participant PO as Pipeline<br/>Orchestrator
+    participant DB as Banco de<br/>Dados
+    participant Content as Content<br/>Engine
+    participant Scene as Scene<br/>Engine
+    participant Voice as Voice<br/>Engine
+    participant Visual as Visual<br/>Engine
+    participant Pacing as Pacing<br/>Engine
+    participant Render as Rendering<br/>Engine
+    participant Thumb as Thumbnail<br/>Engine
+    participant Upload as Upload<br/>Module
+    participant OpenRouter as OpenRouter<br/>LLM
+    participant ElevenLabs as ElevenLabs<br/>TTS
+    participant Pexels as Pexels<br/>API
+    participant FFmpeg as FFmpeg<br/>CLI
+    participant YouTube as YouTube<br/>Data API
+    participant DALLE as DALL-E<br/>SDXL
+
+    %% 1. Inicia pipeline
+    Operator->>+CLI: mestra generate --niche dark
+    CLI->>+PO: execute(niche: "dark")
+
+    %% 2. Busca estado
+    PO->>+DB: getLearningState(niche)
+    DB-->>-PO: LearningState
+    PO->>+DB: getContentPlan(niche)
+    DB-->>-PO: ContentPlan
+
+    %% 3. Gera ideia
+    PO->>+Content: generateIdea(niche, directive)
+    Content->>+OpenRouter: POST /chat/completions
+    OpenRouter-->>-Content: idea
+    Content-->>-PO: Idea
+
+    %% 4. Gera roteiro
+    PO->>+Content: generateScriptFromTemplate(idea, template)
+    Content->>+OpenRouter: POST /chat/completions
+    OpenRouter-->>-Content: Script
+    Content-->>-PO: Script
+
+    %% 5. Gera hooks
+    PO->>+Content: generateHookVariants(idea)
+    Content->>+OpenRouter: POST /chat/completions
+    OpenRouter-->>-Content: Hooks[]
+    Content-->>-PO: bestHook
+
+    %% 6. Segmenta em cenas
+    PO->>+Scene: splitIntoScenes(script)
+    Scene-->>-PO: Scene[]
+    PO->>+Scene: generateVisualQueries(scenes)
+    Scene-->>-PO: Scene[] (com queries)
+
+    %% 7. Voice + Visual em paralelo
+    par
+        PO->>+Voice: generateVoice(scene)
+        Voice->>+ElevenLabs: POST /text-to-speech
+        ElevenLabs-->>-Voice: AudioSegment
+        Voice-->>-PO: AudioSegments[]
+    and
+        PO->>+Visual: searchClips(scene.visualQuery)
+        Visual->>+Pexels: GET /videos/search
+        Pexels-->>-Visual: Clips[]
+        Visual->>+Visual: rankClips(clips, scene)
+        Visual-->>-PO: bestClip
+    end
+
+    %% 8. Aplica pacing
+    PO->>+Pacing: enforceMaxSceneDuration(scenes)
+    Pacing-->>-PO: scenes (max 2.5s)
+    PO->>+Pacing: addPatternInterrupts(scenes)
+    PO->>+Pacing: applyZoomEffects(scenes)
+    PO->>+Pacing: addMicroTransitions(scenes)
+
+    %% 9. Renderiza
+    PO->>+Render: composeScene(scene)
+    Render->>+FFmpeg: -i video -i audio -ss start -to end
+    FFmpeg-->>-Render: scene.mp4
+    PO->>+Render: stitchScenes(scenes)
+    Render->>+FFmpeg: -f concat -i list.txt
+    FFmpeg-->>-Render: video.mp4
+    Render-->>-PO: videoPath
+
+    %% 10. Legendas e música
+    PO->>+Render: addSubtitles(videoPath, scenes)
+    Render->>+FFmpeg: -vf subtitles=subs.srt
+    FFmpeg-->>-Render: video_with_subs.mp4
+    PO->>+Render: addBackgroundMusic(videoPath)
+    Render->>+FFmpeg: -i video -i music -filter_complex amix
+    FFmpeg-->>-Render: final.mp4
+
+    %% 11. Gera thumbnail
+    PO->>+Thumb: generateThumbnailConcepts(idea)
+    Thumb->>+DALLE: POST /images/generations
+    DALLE-->>-Thumb: Image
+    Thumb-->>-PO: Thumbnail
+
+    %% 12. Upload
+    PO->>+Upload: generateTitle(idea)
+    Upload->>+OpenRouter: POST /chat/completions
+    OpenRouter-->>-Upload: title
+    PO->>+Upload: generateDescription(script)
+    PO->>+Upload: generateTags(idea, script)
+    PO->>+Upload: uploadToYoutube(video, thumbnail, metadata)
+    Upload->>+YouTube: POST /videos
+    YouTube-->>-Upload: videoId
+    Upload-->>-PO: videoId
+
+    %% 13. Persiste
+    PO->>+DB: savePipeline(context)
+    DB-->>-PO: OK
+
+    PO-->>-CLI: completed
+    CLI-->>-Operator: Video published: https://youtube.com/watch?v=videoId
+
+    %% Erros
+    alt Retry logic
+        Note over PO: Se step falhar: retry 3x<br/>Persistir estado após cada step
+    else Falha final
+        PO->>+DB: updatePipelineStatus(id, "failed")
+        DB-->>-PO: OK
+        PO-->>-CLI: failed
+        CLI-->>-Operator: Error: ${error.message}
+    end
+
+    %% Performance
+    Note over Operator: Meta: < 10 min por vídeo
+    Note over PO: Persistir a cada step completo

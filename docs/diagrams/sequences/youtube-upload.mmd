@@ -1,0 +1,71 @@
+%% ============================================================
+%% Fluxo 5: Upload e Publicação no YouTube
+%% Referência: docs/blueprint/07-critical_flows.md
+%% ============================================================
+
+sequenceDiagram
+    autonumber
+
+    participant PO as Pipeline<br/>Orchestrator
+    participant Upload as Upload<br/>Module
+    participant LLM as OpenRouter<br/>LLM
+    participant YouTube as YouTube<br/>Data API
+    participant DB as Banco de<br/>Dados
+
+    %% 1. Video pronto
+    Note over PO: videoPath e thumbnailPath prontos
+
+    %% 2. Gera metadados
+    PO->>+Upload: generateTitle(idea)
+    Upload->>+LLM: POST /chat/completions
+    LLM-->>-Upload: title
+    Upload-->>-PO: title
+
+    PO->>+Upload: generateDescription(script)
+    Upload->>+LLM: POST /chat/completions
+    LLM-->>-Upload: description
+    Upload-->>-PO: description
+
+    PO->>+Upload: generateTags(idea, script)
+    Upload->>+LLM: POST /chat/completions
+    LLM-->>-Upload: tags[]
+    Upload-->>-PO: tags
+
+    %% 3. Upload video
+    PO->>+Upload: uploadToYoutube(videoPath, metadata)
+    Upload->>+YouTube: POST /upload/videos (multipart)
+    
+    alt Sucesso
+        YouTube-->>-Upload: videoId
+    else Rate limit (429)
+        Upload->>+Upload: backoff(seconds: 30)
+        Upload->>+YouTube: RETRY
+    else Video muito grande
+        YouTube-->>-Upload: 413 Payload Too Large
+        Upload-->>-PO: Error: Video too large
+    end
+
+    %% 4. Upload thumbnail
+    alt Video uploaded successfully
+        PO->>+Upload: uploadThumbnail(thumbnailPath, videoId)
+        Upload->>+YouTube: PATCH /videos?id=videoId<br/>thumbnail
+        alt Sucesso
+            YouTube-->>-Upload: OK
+        else Falha
+            Note over Upload: USA thumbnail default<br/>Continua
+        end
+    end
+
+    %% 5. Atualiza pipeline
+    PO->>+DB: updatePipeline(videoId, status: "completed")
+    DB-->>-PO: OK
+
+    PO-->>-PO: Pipeline completed
+
+    %% Erros
+    alt Titulo/descricao falham
+        Note over Upload: USA valores do script<br/>Continua
+    end
+
+    %% Performance
+    Note over Upload: Meta video: < 2 min<br/>Meta thumbnail: < 10s

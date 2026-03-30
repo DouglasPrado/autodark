@@ -6,18 +6,18 @@
 
 ## Pirâmide de Testes
 
-A estratégia de testes segue o modelo da pirâmide: a base é composta por um grande volume de **testes unitários** (rápidos e baratos), seguida por uma camada intermediária de **testes de integração**, e no topo uma quantidade reduzida de **testes end-to-end** (lentos e mais frágeis). Testes de **carga** e **resiliência** complementam a pirâmide para validar requisitos não funcionais.
-
-> Qual a proporção ideal de testes para o seu projeto? (ex.: 70% unit, 20% integration, 10% e2e)
+A estratégia de testes segue o modelo da pirâmide: a base é composta por um grande volume de **testes unitários** (rápidos e baratos), seguida por uma camada intermediária de **testes de integração**, e no topo uma quantidade reduzida de **testes end-to-end** (lentos e mais frágeis).
 
 ```
-        /  E2E  \
-       /----------\
-      / Integração \
-     /----------------\
-    /    Unitários      \
-   /______________________\
+         /  E2E  \
+        /----------\
+       / Integração \
+      /----------------\
+     /    Unitários      \
+    /______________________\
 ```
+
+**Proposta:** 70% unitários, 20% integração, 10% E2E
 
 ---
 
@@ -28,11 +28,15 @@ A estratégia de testes segue o modelo da pirâmide: a base é composta por um g
 | Item | Descrição |
 |---|---|
 | **Objetivo** | Validar o comportamento correto de funções, métodos e classes de forma isolada, sem dependências externas. |
-| **Escopo — O que testar** | Lógica de negócio, validações, transformações de dados, cálculos, edge cases e tratamento de erros. |
-| **Ferramentas sugeridas** | {{ferramentas_unit_test — ex.: Jest, PyTest, xUnit, Go testing}} |
-| **Critérios de sucesso** | Cobertura mínima atingida; todos os testes passam no CI; tempo de execução total abaixo de {{tempo_max_unit — ex.: 2 min}}. |
+| **Escopo — O que testar** | Lógica de negócio (engines), validações de PipelineContext, transformações de dados, cálculos de scoring, tratamento de erros, parsing de templates. |
+| **Ferramentas sugeridas** | Vitest (mais rápido para TypeScript) ou Jest |
+| **Critérios de sucesso** | Cobertura mínima 70%; todos os testes passam no CI; tempo de execução total abaixo de 2 minutos. |
 
-> Quais módulos possuem lógica crítica de negócio que exige cobertura unitária prioritária?
+**Módulos prioritários:**
+- SceneEngine (splitIntoScenes, estimateDurations)
+- PacingEngine (enforceMaxSceneDuration)
+- LearningEngine (calculateWeights, analyzeFailures)
+- PerformanceEngine (scoreVideoPerformance)
 
 ---
 
@@ -40,12 +44,17 @@ A estratégia de testes segue o modelo da pirâmide: a base é composta por um g
 
 | Item | Descrição |
 |---|---|
-| **Objetivo** | Validar a comunicação e o contrato entre componentes internos e serviços externos (banco de dados, filas, APIs). |
-| **Escopo — O que testar** | Chamadas entre microsserviços, queries ao banco, publicação/consumo de eventos, integrações com APIs de terceiros. |
-| **Ferramentas sugeridas** | {{ferramentas_integration_test — ex.: Testcontainers, Supertest, WireMock, Pact}} |
-| **Critérios de sucesso** | Contratos entre serviços validados; sem falhas de comunicação; tempo de execução abaixo de {{tempo_max_integration — ex.: 5 min}}. |
+| **Objetivo** | Validar a comunicação e o contrato entre componentes internos e serviços externos. |
+| **Escopo — O que testar** | Chamadas às APIs (OpenRouter, ElevenLabs, Pexels), queries ao banco (Prisma),CLI commands, parsing de responses. |
+| **Ferramentas sugeridas** | Mock Service Worker (MSW) para APIs HTTP; Testcontainers para PostgreSQL |
+| **Critérios de sucesso** | Contratos entre serviços validados; sem falhas de comunicação; tempo de execução abaixo de 5 minutos. |
 
-> Quais integrações externas são mais críticas e devem ter testes de contrato?
+**Integrações críticas a testar:**
+- OpenRouter SDK (geração de roteiro)
+- ElevenLabs SDK (TTS)
+- Pexels API (busca de clips)
+- YouTube Data API (upload)
+- Prisma (persistência)
 
 ---
 
@@ -53,12 +62,16 @@ A estratégia de testes segue o modelo da pirâmide: a base é composta por um g
 
 | Item | Descrição |
 |---|---|
-| **Objetivo** | Validar fluxos completos do sistema do ponto de vista do usuário final. |
-| **Escopo — O que testar** | Jornadas críticas do usuário, fluxos de autenticação, checkout, onboarding e demais happy paths prioritários. |
-| **Ferramentas sugeridas** | {{ferramentas_e2e_test — ex.: Cypress, Playwright, Selenium, Maestro}} |
-| **Critérios de sucesso** | Todos os fluxos críticos cobertos; execução estável (flaky rate < {{max_flaky_rate — ex.: 2%}}); tempo total abaixo de {{tempo_max_e2e — ex.: 15 min}}. |
+| **Objetivo** | Validar fluxos completos do sistema via CLI. |
+| **Escopo — O que testar** | Pipeline completo (happy path), retry de step, resume de pipeline, upload de vídeo. |
+| **Ferramentas sugeridas** | Bun test ou Jest com mocks de APIs externas (gravação de vídeo é lenta para E2E) |
+| **Critérios de sucesso** | Fluxos críticos cobertos; execução estável; tempo total abaixo de 15 minutos. |
 
-> Quais são as jornadas de usuário que, se falharem, causam maior impacto ao negócio?
+**Fluxos críticos a cobrir:**
+- UC-001: Executar Pipeline de Geração de Vídeo
+- UC-004: Retry de Step com Persistência
+- UC-006: Upload de Vídeo no YouTube
+- UC-007: Verificar Status do Pipeline
 
 ---
 
@@ -66,12 +79,15 @@ A estratégia de testes segue o modelo da pirâmide: a base é composta por um g
 
 | Item | Descrição |
 |---|---|
-| **Objetivo** | Verificar se o sistema suporta a carga esperada e identificar gargalos de performance. |
-| **Escopo — O que testar** | Throughput máximo, latência sob carga (p50, p95, p99), comportamento em picos de tráfego, uso de recursos (CPU, memória). |
-| **Ferramentas sugeridas** | {{ferramentas_load_test — ex.: k6, Gatling, Locust, Artillery}} |
-| **Critérios de sucesso** | Sistema suporta {{carga_esperada — ex.: 1000 req/s}} com latência p99 < {{latencia_p99 — ex.: 500ms}}; sem degradação ou erros acima de {{taxa_erro_max — ex.: 0.1%}}. |
+| **Objetivo** | Verificar se o sistema suporta a carga esperada (10+ vídeos/dia). |
+| **Escopo — O que testar** | Throughput de pipelines, latência por step, tempo total de geração (< 10 min), uso de recursos. |
+| **Ferramentas sugeridas** | k6 ou artillery (scripts de carga simples) |
+| **Critérios de sucesso** | Sistema suporta 10+ vídeos/dia; latência por step dentro do esperado; sem degradação. |
 
-> Qual o volume de tráfego esperado em condições normais e em picos?
+**Métricas a validar:**
+- Tempo por step (p50, p95)
+- Tempo total pipeline < 10 min
+- Retry rate < 5%
 
 ---
 
@@ -79,55 +95,94 @@ A estratégia de testes segue o modelo da pirâmide: a base é composta por um g
 
 | Item | Descrição |
 |---|---|
-| **Objetivo** | Validar a capacidade do sistema de se recuperar de falhas inesperadas em infraestrutura e dependências. |
-| **Escopo — O que testar** | Queda de nós/pods, falha de banco de dados, latência elevada em rede, indisponibilidade de serviços externos, esgotamento de recursos. |
-| **Ferramentas sugeridas** | {{ferramentas_chaos_test — ex.: Chaos Monkey, Litmus, Gremlin, Toxiproxy}} |
-| **Critérios de sucesso** | Sistema se recupera automaticamente em < {{tempo_recuperacao — ex.: 30s}}; circuit breakers atuam corretamente; sem perda de dados. |
+| **Objetivo** | Validar a capacidade do sistema de se recuperar de falhas. |
+| **Escopo — O que testar** | Fallback de API (LLM, TTS), retry com backoff, persistência em falha de banco, resume de pipeline. |
+| **Ferramentas sugeridas** | Testesunitários simulando falhas; não precisa de chaos engineering complexo |
+| **Critérios de sucesso** | Retry funciona; fallback para alternativas; sem perda de dados. |
 
-> Quais são os cenários de falha mais prováveis em produção que precisam ser simulados?
+**Cenários de falha:**
+- API externa indisponível → retry + fallback
+- Banco indisponível → continua em memória + persiste depois
+- Step falha → retry 3x + marca failed
 
 ---
 
 ## Cobertura Mínima
 
-> Qual o nível mínimo de cobertura aceitável para cada tipo de teste?
-
 | Camada | Cobertura Mínima | Justificativa |
 |---|---|---|
-| Unit Tests | {{cobertura_unit — ex.: 80%}} | {{justificativa_unit — ex.: Garante que a lógica de negócio central está protegida contra regressões.}} |
-| Integration Tests | {{cobertura_integration — ex.: 60%}} | {{justificativa_integration — ex.: Cobre os contratos críticos entre serviços e dependências externas.}} |
-| End-to-End Tests | {{cobertura_e2e — ex.: 100% dos fluxos críticos}} | {{justificativa_e2e — ex.: Assegura que as jornadas de maior valor para o negócio funcionam corretamente.}} |
-| Load Tests | {{cobertura_load — ex.: Endpoints de alta demanda}} | {{justificativa_load — ex.: Previne degradação de performance nos pontos de maior tráfego.}} |
-| Chaos Tests | {{cobertura_chaos — ex.: Cenários de falha mapeados no risk assessment}} | {{justificativa_chaos — ex.: Valida a resiliência nos pontos de falha mais prováveis.}} |
-
-<!-- APPEND:coverage -->
+| Unit Tests | 70% | Garante que a lógica de negócio central (engines) está protegida contra regressões. |
+| Integration Tests | 60% | Cobre os contratos críticos com APIs externas e banco de dados. |
+| End-to-End Tests | 100% dos fluxos críticos | Assegura que as jornadas de maior valor (pipeline, upload, retry) funcionam. |
+| Load Tests | 3 cenários-chave | Previne degradação de performance nos pontos críticos. |
+| Chaos Tests | 5 cenários de falha | Valida a resiliência nos pontos de falha mais prováveis. |
 
 ---
 
 ## Ambientes de Teste
 
-> Quais ambientes estão disponíveis para execução de testes e qual o propósito de cada um?
-
 | Ambiente | Propósito | Dados |
 |---|---|---|
-| {{ambiente_1 — ex.: Local}} | {{proposito_1 — ex.: Desenvolvimento e testes unitários rápidos}} | {{dados_1 — ex.: Mock / fixtures locais}} |
-| {{ambiente_2 — ex.: CI}} | {{proposito_2 — ex.: Execução automatizada de unit e integration tests}} | {{dados_2 — ex.: Seed / banco em container}} |
-| {{ambiente_3 — ex.: Staging}} | {{proposito_3 — ex.: Testes E2E, carga e validação pré-produção}} | {{dados_3 — ex.: Produção anonimizada}} |
-| {{ambiente_4 — ex.: Produção}} | {{proposito_4 — ex.: Chaos tests e monitoramento contínuo}} | {{dados_4 — ex.: Dados reais (observabilidade, não testes destrutivos)}} |
+| **Local** | Desenvolvimento e testes unitários rápidos |Mocks e fixtures |
+| **CI** | Execução automatizada de unit e integration tests | Banco SQLite em memória |
+| **Staging** | Validação pré-produção (upload real pode ser mockado) | Dados de teste |
+| **Produção** | Monitoramento contínuo, coleta de métricas reais | Dados reais (observabilidade) |
 
 ---
 
 ## Automação e CI
 
-> Quais testes rodam automaticamente no pipeline de CI/CD?
-
 | Etapa do Pipeline | Testes Executados | Gatilho | Bloqueante? |
 |---|---|---|---|
-| {{etapa_1 — ex.: Pull Request}} | {{testes_1 — ex.: Unit + Integration}} | {{gatilho_1 — ex.: Push / abertura de PR}} | {{bloqueante_1 — ex.: Sim}} |
-| {{etapa_2 — ex.: Merge na main}} | {{testes_2 — ex.: Unit + Integration + E2E}} | {{gatilho_2 — ex.: Merge}} | {{bloqueante_2 — ex.: Sim}} |
-| {{etapa_3 — ex.: Deploy em staging}} | {{testes_3 — ex.: E2E + Load}} | {{gatilho_3 — ex.: Deploy automático}} | {{bloqueante_3 — ex.: Sim}} |
-| {{etapa_4 — ex.: Deploy em produção}} | {{testes_4 — ex.: Smoke tests + Chaos (agendado)}} | {{gatilho_4 — ex.: Promoção manual ou automática}} | {{bloqueante_4 — ex.: Smoke sim / Chaos não}} |
+| **Pull Request** | Unit tests (70% cobertura) | Push / abertura de PR | Sim |
+| **Merge na main** | Unit + Integration | Merge | Sim |
+| **Deploy staging** | E2E (fluxos críticos) | Deploy automático | Sim |
+| **Deploy produção** | Smoke tests | Promoção manual | Sim |
+| **Agendado (diário)** | Load tests | Cron | Não |
 
-<!-- APPEND:ci-pipeline -->
+**Tempo máximo do pipeline de CI:** 15 minutos
 
-> Qual o tempo máximo aceitável para o pipeline completo de testes? {{tempo_max_pipeline — ex.: 20 min}}
+---
+
+## Testes Específicos por Engine
+
+| Engine | Tipo de Teste Prioritário | Cobertura Alvo |
+|--------|---------------------------|----------------|
+| Content Engine | Unit + Integration | 80% |
+| Scene Engine | Unit | 75% |
+| Voice Engine | Integration (mock ElevenLabs) | 70% |
+| Visual Engine | Integration (mock Pexels) | 70% |
+| Pacing Engine | Unit | 85% |
+| Rendering Engine | Unit + Integration (mock FFmpeg) | 70% |
+| Thumbnail Engine | Unit + Integration | 70% |
+| Performance Engine | Unit + Integration | 75% |
+| Strategy Engine | Unit | 70% |
+| Learning Engine | Unit | 80% |
+| Pipeline Orchestrator | Unit + E2E | 80% |
+
+---
+
+## Mocks e Stubs
+
+| Serviço | Estratégia | Ferramenta |
+|---------|------------|------------|
+| OpenRouter | Mock de resposta | MSW |
+| ElevenLabs | Mock de áudio | MSW |
+| Pexels | Mock de clips | MSW |
+| YouTube Data | Mock de upload | MSW |
+| YouTube Analytics | Mock de métricas | MSW |
+| FFmpeg | Stub de renderização | exec mocking |
+| Banco | SQLite em memória | Prisma |
+
+---
+
+## Critérios de Merge
+
+- [ ] Cobertura de unit tests ≥ 70%
+- [ ] Todos os unit tests passam
+- [ ] Todos os integration tests passam
+- [ ] Nenhum teste com `skip` ou `todo`
+- [ ] Linting passando
+- [ ] TypeScript compila sem erros
+
+<!-- APPEND:coverage -->

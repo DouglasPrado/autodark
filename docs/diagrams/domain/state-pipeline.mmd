@@ -1,0 +1,47 @@
+%% ============================================================
+%% Máquina de Estados: Pipeline
+%% Referência: docs/blueprint/09-state-models.md
+%% ============================================================
+
+stateDiagram-v2
+    direction TB
+
+    [*] --> pending
+
+    %% Estados
+    pending : Pipeline criado<br/>Aguardando início
+    running : Steps sendo<br/>processados
+    paused : Pausado para<br/>retry manual
+    completed : Vídeo publicado<br/>sucesso
+    failed : Falha em<br/>algum step
+
+    %% Transições principais
+    pending --> running : Iniciar pipeline
+    running --> running : Step completo
+    running --> paused : Pausar
+    paused --> running : Resume
+    running --> completed : Upload sucesso
+    running --> failed : Step falha 3x
+    paused --> failed : Cancelar
+    failed --> pending : Reiniciar
+
+    %% Estados terminais
+    completed --> [*]
+    failed --> [*]
+
+    %% Notas
+    note right of pending
+        Nicho configurado<br/>APIs disponíveis
+    end note
+
+    note right of running
+        Executando steps:<br/>Content → Scene →<br/>Voice → Visual →<br/>Pacing → Render →<br/>Upload
+    end note
+
+    note right of completed
+        Estado terminal<br/>Vídeo no YouTube
+    end note
+
+    note right of failed
+        Estado terminal<br/>Requer intervenção
+    end note

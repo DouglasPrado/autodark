@@ -1,0 +1,42 @@
+%% ============================================================
+%% Máquina de Estados: Scene
+%% Referência: docs/blueprint/09-state_models.md
+%% ============================================================
+
+stateDiagram-v2
+    direction TB
+
+    [*] --> pending
+
+    %% Estados
+    pending : Scene criada<br/>Aguardando
+    audio_generating : Gerando<br/>áudio TTS
+    audio_ready : Áudio<br/>pronto
+    visual_ready : Visual<br/>pronto
+    rendered : Scene<br/>renderizada
+    failed : Falha no<br/>processamento
+
+    %% Transições
+    pending --> audio_generating : Iniciar
+    audio_generating --> audio_ready : Áudio OK
+    audio_ready --> visual_ready : Visual OK
+    visual_ready --> rendered : FFmpeg OK
+    audio_generating --> failed : ElevenLabs fail
+    visual_ready --> failed : FFmpeg fail
+
+    %% Estados terminais
+    rendered --> [*]
+    failed --> [*]
+
+    %% Notas
+    note right of pending
+        text, duration,<br/>visualQuery
+    end note
+
+    note right of audio_generating
+        ElevenLabs API
+    end note
+
+    note right of rendered
+        Estado terminal<br/>scene.mp4
+    end note

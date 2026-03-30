@@ -1,61 +1,122 @@
 %% ============================================================
-%% Modelo de Dados (ER)
-%% Referência: docs/05-data-model.md
-%% ============================================================
-%% GUIA: Represente as tabelas/collections do banco de dados com
-%% campos e relacionamentos. Substitua os {{placeholders}} pelos
-%% nomes reais das tabelas e colunas do seu projeto.
-%%
-%% Perguntas orientadoras:
-%% - Quais tabelas/collections o sistema precisa?
-%% - Quais são as chaves primárias e estrangeiras?
-%% - Quais índices são necessários para performance?
-%% - Qual a cardinalidade entre as tabelas?
-%% - Existem campos de auditoria (created_at, updated_at)?
+%% Modelo de Dados (ER) — Mestra AI
+%% Referência: docs/blueprint/05-data-model.md
 %% ============================================================
 
 erDiagram
-    {{tabela1}} {
+    pipelines {
         uuid id PK "Identificador único"
-        string {{campo1_nome}} "{{descrição_campo1}}"
-        string {{campo1_email}} UK "{{descrição_campo_unique}}"
-        timestamp created_at "Data de criação"
-        timestamp updated_at "Data de atualização"
+        varchar niche NOT NULL "Nicho do canal"
+        varchar status NOT NULL "pending, running, completed, failed"
+        text idea "Ideia gerada"
+        jsonb script "Roteiro estruturado"
+        jsonb scenes "Array de scenes"
+        jsonb audio_segments "Segmentos de áudio"
+        jsonb clips "Clips visuais"
+        varchar video_path "Caminho do vídeo"
+        varchar thumbnail_path "Caminho da thumbnail"
+        jsonb metadata "Título, descrição, tags"
+        varchar video_id "ID YouTube"
+        uuid metrics_id FK "Referência para video_metrics"
+        decimal performance_score "Score de performance"
+        jsonb learning_state "Estado do learning"
+        text error_message "Mensagem de erro"
+        bigint duration_ms "Duração em ms"
+        timestamp created_at "Criação"
+        timestamp updated_at "Atualização"
     }
 
-    {{tabela2}} {
+    video_metrics {
         uuid id PK "Identificador único"
-        uuid {{fk_tabela1_id}} FK "Referência para {{tabela1}}"
-        string {{campo2_descricao}} "{{descrição_campo2}}"
-        decimal {{campo2_valor}} "{{descrição_valor}}"
-        string status "Status atual do registro"
-        timestamp created_at "Data de criação"
-        timestamp updated_at "Data de atualização"
+        uuid pipeline_id FK "Referência para pipeline"
+        varchar youtube_video_id NOT NULL "ID YouTube"
+        timestamp published_at NOT NULL "Data publicação"
+        integer views DEFAULT 0 "Total visualizações"
+        integer likes DEFAULT 0 "Total likes"
+        integer comments DEFAULT 0 "Total comentários"
+        decimal retention "Retenção média %"
+        decimal ctr "CTR %"
+        decimal avg_watch_time "Tempo médio (segundos)"
+        jsonb drop_off_points "Timestamps de abandono"
+        jsonb retention_curve "Curva de retenção"
+        timestamp created_at "Data de coleta"
     }
 
-    {{tabela3}} {
+    learning_states {
         uuid id PK "Identificador único"
-        uuid {{fk_tabela2_id}} FK "Referência para {{tabela2}}"
-        string {{campo3_tipo}} "{{descrição_tipo}}"
-        int {{campo3_quantidade}} "{{descrição_quantidade}}"
-        timestamp {{campo3_data}} "{{descrição_data}}"
-        timestamp created_at "Data de criação"
+        varchar niche NOT NULL UNIQUE "Nicho do canal"
+        jsonb hook_weights NOT NULL "Pesos para hooks"
+        jsonb template_weights NOT NULL "Pesos para template"
+        jsonb pacing_weights NOT NULL "Pesos para pacing"
+        jsonb content_weights NOT NULL "Pesos para conteúdo"
+        boolean is_active DEFAULT FALSE "Learning ativo"
+        integer analyzed_videos DEFAULT 0 "Videos analisados"
+        timestamp last_updated "Última atualização"
+        timestamp created_at "Criação"
     }
 
-    {{tabela4_configuracao}} {
+    content_plans {
         uuid id PK "Identificador único"
-        string chave UK "Chave de configuração"
-        string valor "Valor da configuração"
-        boolean ativo "Registro ativo"
-        timestamp created_at "Data de criação"
+        varchar niche NOT NULL "Nicho do canal"
+        jsonb topics NOT NULL "Tópicos priorizados"
+        timestamp generated_at "Data de geração"
+    }
+
+    series {
+        uuid id PK "Identificador único"
+        varchar title NOT NULL "Título da série"
+        varchar topic NOT NULL "Tópico central"
+        integer episode_count DEFAULT 0 "Número de episódios"
+        varchar status DEFAULT 'planning' "Status da série"
+        timestamp created_at "Criação"
+    }
+
+    series_videos {
+        uuid id PK "Identificador único"
+        uuid series_id FK "Referência para série"
+        uuid pipeline_id FK "Referência para pipeline"
+        integer episode_order NOT NULL "Ordem do episódio"
+        timestamp added_at "Data de adição"
+    }
+
+    assets {
+        uuid id PK "Identificador único"
+        varchar source NOT NULL "pexels, elevenlabs, dalle"
+        varchar source_id NOT NULL "ID no source"
+        text source_url "URL original"
+        varchar local_path NOT NULL "Caminho local"
+        varchar media_type NOT NULL "video, image, audio"
+        decimal duration "Duração"
+        varchar query "Query usada"
+        decimal score "Score de relevância"
+        timestamp cached_at "Data de cache"
+    }
+
+    settings {
+        varchar key PK "Chave de configuração"
+        text value NOT NULL "Valor"
+        varchar description "Descrição"
+        timestamp updated_at "Atualização"
     }
 
     %% --- Relacionamentos ---
-    %% {{tabela1}} possui muitos {{tabela2}}
-    {{tabela1}} ||--o{ {{tabela2}} : "{{descrição_rel_1_2}}"
+    pipelines ||--o| video_metrics : "pode ter"
+    pipelines ||--o{ series_videos : "pode pertencer a"
+    series ||--o{ series_videos : "contém"
+    series_videos }o--|| pipelines : "relaciona"
 
-    %% {{tabela2}} possui muitos {{tabela3}} (obrigatório)
-    {{tabela2}} ||--|{ {{tabela3}} : "{{descrição_rel_2_3}}"
-
-    %% {{tabela1}} pode ter zero ou uma {{tabela4_configuracao}}
-    {{tabela1}} |o--o| {{tabela4_configuracao}} : "{{descrição_rel_1_4}}"
+    %% Índices mencionados no modelo de dados
+    %% idx_pipelines_status (status)
+    %% idx_pipelines_niche (niche)
+    %% idx_pipelines_created (created_at)
+    %% idx_pipelines_video_id (video_id)
+    %% idx_metrics_pipeline (pipeline_id)
+    %% idx_metrics_youtube (youtube_video_id)
+    %% idx_metrics_retention (retention)
+    %% idx_learning_niche (niche) UNIQUE
+    %% idx_plans_niche (niche)
+    %% idx_plans_generated (generated_at)
+    %% idx_series_topic (topic)
+    %% idx_assets_source (source, source_id)
+    %% idx_assets_query (query)
+    %% idx_assets_type (media_type)

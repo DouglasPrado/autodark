@@ -12,42 +12,46 @@ graph TB
     %% -------------------------------------------------------
     %% Atores (Personas)
     %% Quem interage diretamente com o sistema?
-    %% Adicione ou remova atores conforme necessario.
     %% -------------------------------------------------------
-    User["👤 {{Ator 1}}<br/>{{descricao do ator 1}}"]
-    Admin["👤 {{Ator 2}}<br/>{{descricao do ator 2}}"]
+    Operator["👤 Operador de Canal<br/>Usuário único que opera via CLI para gerar e publicar vídeos"]
 
     %% -------------------------------------------------------
     %% Sistema Central
-    %% Qual e o sistema que estamos modelando?
     %% -------------------------------------------------------
-    System["🏢 {{Nome do Sistema}}<br/>{{descricao curta do sistema}}"]
+    MestraAI["🏢 Mestra AI<br/>Sistema autônomo de crescimento de canal YouTube"]
 
     %% -------------------------------------------------------
     %% Sistemas Externos
-    %% Quais sistemas de terceiros ou legados sao consumidos?
-    %% Exemplos: gateway de pagamento, servico de e-mail,
-    %% provedor de identidade, ERP, CRM, etc.
     %% -------------------------------------------------------
-    ExtA["📦 {{Sistema Externo 1}}<br/>{{funcao do sistema externo 1}}"]
-    ExtB["📦 {{Sistema Externo 2}}<br/>{{funcao do sistema externo 2}}"]
+    OpenRouter["📦 OpenRouter<br/>Gateway LLM para geração de roteiro e estratégia"]
+    ElevenLabs["📦 ElevenLabs<br/>Text-to-Speech para narração"]
+    Pexels["📦 Pexels API<br/>Busca de vídeos e imagens stock"]
+    FFmpeg["📦 FFmpeg<br/>Motor de renderização local"]
+    YouTubeData["📦 YouTube Data API<br/>Upload e publicação de vídeos"]
+    YouTubeAnalytics["📦 YouTube Analytics API<br/>Coleta de métricas reais"]
+    DALLE["📦 DALL-E/SDXL<br/>Geração de imagens para thumbnails"]
 
     %% -------------------------------------------------------
     %% Relacionamentos
-    %% Descreva a acao ou dado trocado em cada seta.
-    %% Use verbos no infinitivo: "Consulta", "Envia", "Gerencia".
     %% -------------------------------------------------------
-    User -->|"{{acao do ator 1}}"| System
-    Admin -->|"{{acao do ator 2}}"| System
-    System -->|"{{protocolo/acao}}"| ExtA
-    System -->|"{{protocolo/acao}}"| ExtB
+    Operator -->|"Executa pipeline via CLI"| MestraAI
+    MestraAI -->|"Gera roteiro e ideias"| OpenRouter
+    MestraAI -->|"Gera narração TTS"| ElevenLabs
+    MestraAI -->|"Busca assets visuais"| Pexels
+    MestraAI -->|"Renderiza vídeo"| FFmpeg
+    MestraAI -->|"Publica vídeo"| YouTubeData
+    MestraAI -->|"Coleta métricas de performance"| YouTubeAnalytics
+    MestraAI -->|"Gera imagens para thumbnails"| DALLE
 
     %% -------------------------------------------------------
     %% Estilos C4
-    %% Azul escuro = atores | Azul medio = sistema | Cinza = externo
     %% -------------------------------------------------------
-    style System fill:#1168bd,stroke:#0b4884,color:#fff
-    style User fill:#08427b,stroke:#052e56,color:#fff
-    style Admin fill:#08427b,stroke:#052e56,color:#fff
-    style ExtA fill:#999999,stroke:#6b6b6b,color:#fff
-    style ExtB fill:#999999,stroke:#6b6b6b,color:#fff
+    style MestraAI fill:#1168bd,stroke:#0b4884,color:#fff
+    style Operator fill:#08427b,stroke:#052e56,color:#fff
+    style OpenRouter fill:#999999,stroke:#6b6b6b,color:#fff
+    style ElevenLabs fill:#999999,stroke:#6b6b6b,color:#fff
+    style Pexels fill:#999999,stroke:#6b6b6b,color:#fff
+    style FFmpeg fill:#999999,stroke:#6b6b6b,color:#fff
+    style YouTubeData fill:#999999,stroke:#6b6b6b,color:#fff
+    style YouTubeAnalytics fill:#999999,stroke:#6b6b6b,color:#fff
+    style DALLE fill:#999999,stroke:#6b6b6b,color:#fff

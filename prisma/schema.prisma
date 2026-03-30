@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Pipeline {
+  id               String   @id @default(uuid())
+  niche            String
+  status           String   @default("pending")
+  idea             String?
+  script           String?
+  scenes           String?
+  audioSegments    String?
+  clips            String?
+  videoPath        String?
+  thumbnailPath    String?
+  metadata         String?
+  videoId          String?
+  performanceScore Float?
+  learningState    String?
+  errorMessage     String?
+  durationMs       Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  metrics      VideoMetrics[]
+  seriesVideos SeriesVideo[]
+
+  @@index([status])
+  @@index([niche])
+  @@index([createdAt])
+  @@index([videoId])
+}
+
+model VideoMetrics {
+  id             String   @id @default(uuid())
+  pipelineId     String
+  youtubeVideoId String
+  publishedAt    DateTime
+  views          Int      @default(0)
+  likes          Int      @default(0)
+  comments       Int      @default(0)
+  retention      Float?
+  ctr            Float?
+  avgWatchTime   Float?
+  dropOffPoints  String?
+  retentionCurve String?
+  status         String   @default("pending")
+  createdAt      DateTime @default(now())
+
+  pipeline Pipeline @relation(fields: [pipelineId], references: [id])
+
+  @@index([pipelineId])
+  @@index([youtubeVideoId])
+  @@index([retention])
+}
+
+model LearningState {
+  id              String   @id @default(uuid())
+  niche           String   @unique
+  hookWeights     String
+  templateWeights String
+  pacingWeights   String
+  contentWeights  String
+  isActive        Boolean  @default(false)
+  analyzedVideos  Int      @default(0)
+  lastUpdated     DateTime @updatedAt
+  createdAt       DateTime @default(now())
+}
+
+model ContentPlan {
+  id          String   @id @default(uuid())
+  niche       String
+  topics      String
+  generatedAt DateTime @default(now())
+
+  @@index([niche])
+  @@index([generatedAt])
+}
+
+model Series {
+  id           String   @id @default(uuid())
+  title        String
+  topic        String
+  episodeCount Int      @default(0)
+  status       String   @default("planning")
+  createdAt    DateTime @default(now())
+
+  videos SeriesVideo[]
+
+  @@index([topic])
+  @@index([status])
+}
+
+model SeriesVideo {
+  id           String   @id @default(uuid())
+  seriesId     String
+  pipelineId   String
+  episodeOrder Int
+  addedAt      DateTime @default(now())
+
+  series   Series   @relation(fields: [seriesId], references: [id])
+  pipeline Pipeline @relation(fields: [pipelineId], references: [id])
+
+  @@index([seriesId])
+  @@index([pipelineId])
+}
+
+model Asset {
+  id        String   @id @default(uuid())
+  source    String
+  sourceId  String
+  sourceUrl String
+  localPath String
+  mediaType String
+  duration  Float?
+  query     String?
+  score     Float?
+  cachedAt  DateTime @default(now())
+
+  @@unique([source, sourceId])
+  @@index([query])
+  @@index([mediaType])
+  @@index([cachedAt])
+}
+
+model Setting {
+  key         String   @id
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}

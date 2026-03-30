@@ -1,0 +1,58 @@
+%% ============================================================
+%% Fluxo 3: Learning Loop (Ajuste de Pesos)
+%% Referência: docs/blueprint/07-critical_flows.md
+%% ============================================================
+
+sequenceDiagram
+    autonumber
+
+    participant Cron as Cron<br/>Scheduler
+    participant LE as Learning<br/>Engine
+    participant PE as Performance<br/>Engine
+    participant SE as Strategy<br/>Engine
+    participant DB as Banco de<br/>Dados
+
+    %% 1. Dispara learning
+    Cron->>+LE: runLearningLoop()
+
+    %% 2. Busca métricas
+    LE->>+PE: getRecentMetrics(limit: 10)
+    PE->>+DB: getVideoMetrics(last: 10)
+    DB-->>-PE: VideoMetrics[]
+    PE-->>-LE: Metrics[]
+
+    %% 3. Verifica cold start
+    alt analyzedVideos >= 5
+        %% 4. Analisa falhas
+        LE->>+LE: analyzeFailures(metrics)
+        Note over LE: Identifica padroes:<br/>- Hooks com baixa retencao<br/>- Segmentos com alto drop-off<br/>- Templates com baixa performance
+
+        %% 5. Calcula novos pesos
+        LE->>+LE: calculateNewWeights(analysis)
+        Note over LE: Ajusta:<br/>- hookWeights<br/>- templateWeights<br/>- pacingWeights<br/>- contentWeights
+
+        %% 6. Limita taxa de ajuste
+        LE->>+LE: clampWeightChanges(newWeights, maxDelta: 0.1)
+
+        %% 7. Persiste
+        LE->>+DB: updateLearningState(niche, newWeights)
+        DB-->>-LE: OK
+
+        LE->>+SE: notifyWeightsUpdated(newWeights)
+        SE-->>-LE: OK
+
+        LE-->>-Cron: Learning complete
+    else Cold start (< 5 videos)
+        Note over LE: Cold start: usa pesos padrao<br/>Nenhum ajuste realizado
+        LE-->>-Cron: Skipped (cold start)
+    end
+
+    %% Erros
+    alt Convergência instável
+        Note over LE: Limita taxa de ajuste<br/>Mantem pesos anteriores
+    else DB indisponível
+        Note over LE: Retry; LearningState inalterado
+    end
+
+    %% Performance
+    Note over LE: Meta: < 30s<br/>Frequencia: a cada 6h

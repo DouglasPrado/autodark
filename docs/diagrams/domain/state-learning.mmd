@@ -1,0 +1,33 @@
+%% ============================================================
+%% Máquina de Estados: LearningState
+%% Referência: docs/blueprint/09-state_models.md
+%% ============================================================
+
+stateDiagram-v2
+    direction TB
+
+    [*] --> inactive
+
+    %% Estados
+    inactive : Learning inativo<br/>Cold start
+    active : Learning ativo<br/>Ajustando pesos
+    paused : Learning pausado<br/>Instabilidade
+
+    %% Transições
+    inactive --> active : 5+ vídeos<br/>analisados
+    active --> inactive : Desativar
+    active --> paused : Instabilidade
+    paused --> active : Reativar
+
+    %% Notas
+    note right of inactive
+        Pesos padrão<br/>Sem ajuste
+    end note
+
+    note right of active
+        Ajustando:<br/>hookWeights<br/>templateWeights<br/>pacingWeights<br/>contentWeights
+    end note
+
+    note right of paused
+        Mantém pesos<br/>anteriores
+    end note

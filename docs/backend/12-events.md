@@ -1,132 +1,250 @@
 # Eventos e Mensageria
 
-Define eventos de dominio, filas, workers assincronos, schemas de payload e estrategias de retry.
+> Eventos de domínio, filas, workers assíncronos, schemas de payload e estratégias de retry.
 
-> **Consumido por:** [docs/shared/event-mapping.md](../shared/event-mapping.md) (como o frontend reage a cada evento).
+> **Nota:** Este é um sistema CLI síncrono. A maioria dos eventos são emitidos localmente (EventEmitter). A mensageria externa só é usada para jobs agendados.
 
 ---
 
-## Estrategia de Mensageria
+## Estratégia de Mensageria
 
-> Qual tecnologia e padrao de mensageria o sistema usa?
+> Qual tecnologia e padrão de mensageria o sistema usa?
 
-| Aspecto | Decisao |
-| --- | --- |
-| {{Message Broker}} | {{BullMQ / RabbitMQ / Kafka / SQS}} |
-| {{Padrao}} | {{Pub/Sub / Queue / Event Sourcing}} |
-| {{Storage}} | {{Redis / RabbitMQ / Kafka cluster}} |
-| {{Formato}} | {{JSON}} |
-| {{Idempotencia}} | {{Por eventId + timestamp}} |
+| Aspecto | Decisão |
+|---------|----------|
+| Message Broker (local) | Node.js EventEmitter |
+| Scheduled Jobs | node-cron |
+| Formato | JSON |
+| Idempotência | Por pipelineId + stepName |
+
+> O sistema não precisa de message broker externo porque:
+> - Pipeline é síncrono (step a step)
+> - Volume baixo (10+ vídeos/dia)
+> - Só há jobs assíncronos para métricas (YouTube tem delay de 48-72h)
 
 ---
 
 ## Mapa de Eventos
 
-> Quais eventos existem, quem produz e quem consome?
-
-| Evento | Produtor | Consumidor(es) | Fila/Topico | Retry | DLQ |
-| --- | --- | --- | --- | --- | --- |
-| {{UserCreated}} | {{UserService}} | {{EmailWorker, AnalyticsWorker}} | {{user.events}} | {{3x, backoff 2^n}} | {{user.events.dlq}} |
-| {{UserActivated}} | {{UserService}} | {{AnalyticsWorker}} | {{user.events}} | {{3x, backoff 2^n}} | {{user.events.dlq}} |
-| {{UserEmailChanged}} | {{UserService}} | {{EmailWorker, AnalyticsWorker}} | {{user.events}} | {{3x, backoff 2^n}} | {{user.events.dlq}} |
-| {{UserPasswordChanged}} | {{UserService}} | {{EmailWorker}} | {{user.events}} | {{3x, backoff 2^n}} | {{user.events.dlq}} |
-| {{OrderPaid}} | {{PaymentService}} | {{OrderService, NotificationWorker}} | {{order.events}} | {{5x, backoff 2^n}} | {{order.events.dlq}} |
-| {{OrderShipped}} | {{OrderService}} | {{NotificationWorker}} | {{order.events}} | {{5x, backoff 2^n}} | {{order.events.dlq}} |
-| {{EmailRequested}} | {{NotificationService}} | {{EmailWorker}} | {{email.send}} | {{3x, linear 30s}} | {{email.send.dlq}} |
-
-<!-- APPEND:eventos -->
+| Evento | Produtor | Consumidor(es) | Tipo | Retry |
+|--------|----------|----------------|------|-------|
+| PipelineStarted | PipelineOrchestrator | CLI, Logger | Sync | - |
+| PipelineStepCompleted | PipelineOrchestrator | Logger | Sync | - |
+| PipelineCompleted | PipelineOrchestrator | UploadService, Logger | Sync | - |
+| PipelineFailed | PipelineOrchestrator | Logger | Sync | - |
+| PipelineCancelled | PipelineOrchestrator | Logger | Sync | - |
+| MetricsCollected | PerformanceService | LearningService, Logger | Async (cron) | 3x |
+| LearningWeightsUpdated | LearningService | Logger | Async (cron) | - |
+| ContentPlanGenerated | StrategyService | Logger | Async (cron) | 3x |
 
 ---
 
 ## Schema de Eventos
 
-> Para CADA evento, documente payload, versao e regra de idempotencia.
-
-### {{NomeEvento}}
+### PipelineStarted
 
 ```json
 {
-  "eventId": "{{UUID — identificador unico do evento}}",
-  "type": "{{NomeEvento}}",
-  "version": "{{1.0}}",
-  "timestamp": "{{ISO8601}}",
-  "source": "{{nome-do-service}}",
-  "payload": {
-    "{{campo1}}": "{{tipo — descricao}}",
-    "{{campo2}}": "{{tipo — descricao}}"
-  }
-}
-```
-
-**Idempotencia:** {{por eventId | por payload.campo + timestamp}}
-
-<!-- APPEND:schemas -->
-
-<details>
-<summary>Exemplo — UserCreated</summary>
-
-```json
-{
-  "eventId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "type": "UserCreated",
+  "eventId": "550e8400-e29b-41d4-a716-446655440000",
+  "type": "PipelineStarted",
   "version": "1.0",
   "timestamp": "2024-01-01T00:00:00Z",
-  "source": "user-service",
+  "source": "pipeline-orchestrator",
   "payload": {
-    "userId": "550e8400-e29b-41d4-a716-446655440000",
-    "email": "user@example.com",
-    "name": "Joao Silva",
-    "role": "user"
+    "pipelineId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "niche": "dark",
+    "idea": "Os segredos nunca revelados",
+    "estimatedDuration": 300
   }
 }
 ```
 
-**Idempotencia:** por userId + timestamp (nao processa se ja existe)
-
-</details>
+**Idempotência:** Por pipelineId (não inicia se já existe)
 
 ---
 
-## Workers Assincronos
+### PipelineStepCompleted
 
-> Quais workers processam filas? Documente concorrencia, timeout e retry.
+```json
+{
+  "eventId": "550e8400-e29b-41d4-a716-446655440001",
+  "type": "PipelineStepCompleted",
+  "version": "1.0",
+  "timestamp": "2024-01-01T00:01:00Z",
+  "source": "pipeline-orchestrator",
+  "payload": {
+    "pipelineId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "step": "content",
+    "nextStep": "scene"
+  }
+}
+```
 
-| Worker | Fila | Funcao | Concorrencia | Timeout | Retry | DLQ |
-| --- | --- | --- | --- | --- | --- | --- |
-| {{EmailWorker}} | {{email.send}} | {{Envia emails via provedor}} | {{5}} | {{30s}} | {{3x, backoff 30s}} | {{email.send.dlq}} |
-| {{AnalyticsWorker}} | {{user.events}} | {{Processa eventos para analytics/metricas}} | {{3}} | {{30s}} | {{3x, backoff 2^n}} | {{analytics.dlq}} |
-| {{NotificationWorker}} | {{order.events}} | {{Envia notificacoes (push, in-app) sobre pedidos}} | {{5}} | {{30s}} | {{3x, backoff 30s}} | {{notifications.dlq}} |
-| {{ReportWorker}} | {{reports.generate}} | {{Gera relatorios PDF}} | {{2}} | {{120s}} | {{2x, backoff 60s}} | {{reports.dlq}} |
-| {{WebhookWorker}} | {{webhooks.dispatch}} | {{Dispara webhooks}} | {{10}} | {{15s}} | {{5x, backoff exponencial}} | {{webhooks.dlq}} |
-
-<!-- APPEND:workers -->
+**Idempotência:** Por pipelineId + step
 
 ---
 
-## Estrategia de Retry
+### PipelineCompleted
 
-> Como retries sao configurados?
+```json
+{
+  "eventId": "550e8400-e29b-41d4-a716-446655440002",
+  "type": "PipelineCompleted",
+  "version": "1.0",
+  "timestamp": "2024-01-01T00:10:00Z",
+  "source": "pipeline-orchestrator",
+  "payload": {
+    "pipelineId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "videoId": "dQw4w9WgXcQ",
+    "videoUrl": "https://youtube.com/watch?v=dQw4w9WgXcQ",
+    "duration": 480,
+    "durationMs": 480000
+  }
+}
+```
 
-| Estrategia | Descricao | Quando Usar |
-| --- | --- | --- |
-| {{Backoff exponencial}} | {{1s, 2s, 4s, 8s, 16s...}} | {{Servicos externos (Stripe, APIs)}} |
-| {{Backoff linear}} | {{30s, 60s, 90s...}} | {{Email, notificacoes}} |
-| {{Imediato}} | {{Retry sem delay}} | {{Erros transientes de banco}} |
+**Idempotência:** Por pipelineId (não completa se já completed)
 
-**Dead Letter Queue:** Apos esgotar retries, o evento vai para DLQ. Um processo manual ou automatico revisa a DLQ periodicamente.
+---
+
+### PipelineFailed
+
+```json
+{
+  "eventId": "550e8400-e29b-41d4-a716-446655440003",
+  "type": "PipelineFailed",
+  "version": "1.0",
+  "timestamp": "2024-01-01T00:05:00Z",
+  "source": "pipeline-orchestrator",
+  "payload": {
+    "pipelineId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "step": "render",
+    "error": {
+      "code": "RENDERING_FAILED",
+      "message": "FFmpeg error: Invalid input",
+      "retryable": true
+    },
+    "attempts": 3
+  }
+}
+```
+
+**Idempotência:** Por pipelineId
+
+---
+
+### MetricsCollected
+
+```json
+{
+  "eventId": "550e8400-e29b-41d4-a716-446655440004",
+  "type": "MetricsCollected",
+  "version": "1.0",
+  "timestamp": "2024-01-03T00:00:00Z",
+  "source": "performance-service",
+  "payload": {
+    "pipelineId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "youtubeVideoId": "dQw4w9WgXcQ",
+    "metrics": {
+      "views": 10000,
+      "likes": 500,
+      "comments": 100,
+      "retention": 45.5,
+      "ctr": 8.2,
+      "avgWatchTime": 210
+    }
+  }
+}
+```
+
+**Idempotência:** Por youtubeVideoId + timestamp (dia)
+
+---
+
+### LearningWeightsUpdated
+
+```json
+{
+  "eventId": "550e8400-e29b-41d4-a716-446655440005",
+  "type": "LearningWeightsUpdated",
+  "version": "1.0",
+  "timestamp": "2024-01-04T00:00:00Z",
+  "source": "learning-service",
+  "payload": {
+    "niche": "dark",
+    "analyzedVideos": 6,
+    "adjustments": {
+      "hookWeights": {
+        "curiosity": 0.05,
+        "shock": -0.02
+      }
+    }
+  }
+}
+```
+
+**Idempotência:** Por niche + analyzedVideos (increment)
 
 ---
 
 ## Cron Jobs / Scheduled Tasks
 
-> Existem tarefas agendadas?
+| Job | Frequência | Função | Timeout | Observação |
+|-----|------------|--------|---------|-------------|
+| CollectMetrics | A cada 6h | Coleta métricas de vídeos publicados (48-72h) | 300s | YouTube API delay |
+| RunLearningLoop | Diário 01:00 | Analisa métricas e ajusta learning weights | 600s | Learning assíncrono |
+| GenerateContentPlan | Diário 00:30 | Gera plano de conteúdo baseado em performance | 300s | Strategy assíncrono |
+| CleanupOldAssets | Semanal (Domingo 03:00) | Remove assets locais antigos (> 30 dias) | 600s | Disco |
+| HealthCheck | A cada 15min | Verifica APIs externas e connectivity | 30s | Alertas |
 
-| Job | Frequencia | Funcao | Timeout | Observacao |
-| --- | --- | --- | --- | --- |
-| {{CleanExpiredSessions}} | {{A cada 1h}} | {{Remove sessoes expiradas do Redis}} | {{60s}} | {{—}} |
-| {{GenerateDailyReport}} | {{Diario 02:00}} | {{Gera relatorio de vendas}} | {{300s}} | {{Enfileira em reports.generate}} |
-| {{RetryFailedPayments}} | {{A cada 30min}} | {{Reprocessa pagamentos falhados}} | {{120s}} | {{Max 3 tentativas por pagamento}} |
+### Configuração node-cron
 
-<!-- APPEND:cron -->
+```typescript
+// src/jobs/index.ts
+import cron from 'node-cron';
 
-> (ver [13-integrations.md](13-integrations.md) para clients de APIs externas)
+export const jobs = [
+  // Coleta métricas a cada 6 horas
+  cron.schedule('0 */6 * * *', async () => {
+    await collectMetricsJob.execute();
+  }, { timezone: 'America/Sao_Paulo' }),
+
+  // Learning loop diário à 01:00
+  cron.schedule('0 1 * * *', async () => {
+    await learningLoopJob.execute();
+  }, { timezone: 'America/Sao_Paulo' }),
+
+  // Content plan diário à 00:30
+  cron.schedule('30 0 * * *', async () => {
+    await contentPlanJob.execute();
+  }, { timezone: 'America/Sao_Paulo' }),
+
+  // Cleanup semanal
+  cron.schedule('0 3 * * 0', async () => {
+    await cleanupAssetsJob.execute();
+  }, { timezone: 'America/Sao_Paulo' }),
+
+  // Health check a cada 15 minutos
+  cron.schedule('*/15 * * * *', async () => {
+    await healthCheckJob.execute();
+  }, { timezone: 'America/Sao_Paulo' }),
+];
+```
+
+---
+
+## Estratégia de Retry
+
+| Estratégia | Descrição | Quando Usar |
+|------------|-----------|-------------|
+| Backoff exponencial | 1s, 2s, 4s, 8s | APIs externas (YouTube, LLM, ElevenLabs) |
+| Imediato | Retry sem delay | Erros transientes locais |
+| Scheduling | Job agendado | Métricas do YouTube (48-72h delay) |
+
+**Dead Letter:**
+- Para jobs de métricas: após 3 tentativas falhas, marca vídeo para retry manual
+- Logs sempre gravados, alertas/enviados para erros críticos
+
+---
+
+> Ver [13-integrations.md](13-integrations.md) para clients de APIs externas
