@@ -1,0 +1,53 @@
+%% C4 Nivel 1: Contexto do Sistema
+%% Mostra o sistema, seus atores e sistemas externos
+%% Referencia: docs/blueprint/00-context.md
+%%
+%% Perguntas orientadoras:
+%% - Quem sao os usuarios/atores principais do sistema?
+%% - Quais sistemas externos o sistema precisa integrar?
+%% - Qual o objetivo principal do sistema para cada ator?
+%% - Quais protocolos de comunicacao sao usados com sistemas externos?
+
+graph TB
+    %% -------------------------------------------------------
+    %% Atores (Personas)
+    %% Quem interage diretamente com o sistema?
+    %% Adicione ou remova atores conforme necessario.
+    %% -------------------------------------------------------
+    User["👤 {{Ator 1}}<br/>{{descricao do ator 1}}"]
+    Admin["👤 {{Ator 2}}<br/>{{descricao do ator 2}}"]
+
+    %% -------------------------------------------------------
+    %% Sistema Central
+    %% Qual e o sistema que estamos modelando?
+    %% -------------------------------------------------------
+    System["🏢 {{Nome do Sistema}}<br/>{{descricao curta do sistema}}"]
+
+    %% -------------------------------------------------------
+    %% Sistemas Externos
+    %% Quais sistemas de terceiros ou legados sao consumidos?
+    %% Exemplos: gateway de pagamento, servico de e-mail,
+    %% provedor de identidade, ERP, CRM, etc.
+    %% -------------------------------------------------------
+    ExtA["📦 {{Sistema Externo 1}}<br/>{{funcao do sistema externo 1}}"]
+    ExtB["📦 {{Sistema Externo 2}}<br/>{{funcao do sistema externo 2}}"]
+
+    %% -------------------------------------------------------
+    %% Relacionamentos
+    %% Descreva a acao ou dado trocado em cada seta.
+    %% Use verbos no infinitivo: "Consulta", "Envia", "Gerencia".
+    %% -------------------------------------------------------
+    User -->|"{{acao do ator 1}}"| System
+    Admin -->|"{{acao do ator 2}}"| System
+    System -->|"{{protocolo/acao}}"| ExtA
+    System -->|"{{protocolo/acao}}"| ExtB
+
+    %% -------------------------------------------------------
+    %% Estilos C4
+    %% Azul escuro = atores | Azul medio = sistema | Cinza = externo
+    %% -------------------------------------------------------
+    style System fill:#1168bd,stroke:#0b4884,color:#fff
+    style User fill:#08427b,stroke:#052e56,color:#fff
+    style Admin fill:#08427b,stroke:#052e56,color:#fff
+    style ExtA fill:#999999,stroke:#6b6b6b,color:#fff
+    style ExtB fill:#999999,stroke:#6b6b6b,color:#fff

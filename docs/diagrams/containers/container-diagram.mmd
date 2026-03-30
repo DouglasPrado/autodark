@@ -1,0 +1,110 @@
+%% C4 Nivel 2: Diagrama de Containers
+%% Mostra os blocos principais da arquitetura: apps, APIs, bancos, filas, caches
+%% Referencia: docs/blueprint/01-architecture.md
+%%
+%% Perguntas orientadoras:
+%% - Quais sao os pontos de entrada do sistema (web, mobile, CLI)?
+%% - Quantos servicos backend existem? Sao monolito ou microservicos?
+%% - Qual(is) banco(s) de dados o sistema utiliza?
+%% - Existe fila de mensagens? Para quais fluxos?
+%% - Existe cache? Qual camada se beneficia dele?
+%% - Quais protocolos conectam cada container (HTTP, gRPC, AMQP, WebSocket)?
+
+graph TB
+    %% -------------------------------------------------------
+    %% Atores (vindos do diagrama de contexto)
+    %% -------------------------------------------------------
+    User["👤 {{Ator 1}}<br/>{{descricao}}"]
+    Admin["👤 {{Ator 2}}<br/>{{descricao}}"]
+
+    %% -------------------------------------------------------
+    %% Fronteira do Sistema
+    %% Agrupe aqui todos os containers que voce controla.
+    %% -------------------------------------------------------
+    subgraph SystemBoundary["🏢 {{Nome do Sistema}}"]
+        direction TB
+
+        %% ---------------------------------------------------
+        %% Pontos de Entrada
+        %% Quais aplicacoes o usuario acessa diretamente?
+        %% Exemplos: SPA React, App Mobile, Painel Admin
+        %% ---------------------------------------------------
+        WebApp["🌐 {{Web App}}<br/>{{framework/tecnologia}}<br/>{{descricao curta}}"]
+        MobileApp["📱 {{Mobile App}}<br/>{{framework/tecnologia}}<br/>{{descricao curta}}"]
+
+        %% ---------------------------------------------------
+        %% API / Backend
+        %% Qual e o servico principal que processa regras de negocio?
+        %% Se houver mais de um, adicione containers extras.
+        %% ---------------------------------------------------
+        API["⚙️ {{API Principal}}<br/>{{linguagem/framework}}<br/>{{descricao curta}}"]
+        Worker["⚙️ {{Worker/Background Jobs}}<br/>{{linguagem/framework}}<br/>{{descricao curta}}"]
+
+        %% ---------------------------------------------------
+        %% Armazenamento de Dados
+        %% Qual banco de dados principal? Existe banco secundario?
+        %% ---------------------------------------------------
+        DB[("🗄️ {{Banco de Dados}}<br/>{{tecnologia, ex: PostgreSQL}}<br/>{{descricao curta}}")]
+        Cache[("⚡ {{Cache}}<br/>{{tecnologia, ex: Redis}}<br/>{{descricao curta}}")]
+
+        %% ---------------------------------------------------
+        %% Mensageria
+        %% Existe fila de mensagens? Para quais eventos/comandos?
+        %% ---------------------------------------------------
+        Queue["📨 {{Fila de Mensagens}}<br/>{{tecnologia, ex: RabbitMQ}}<br/>{{descricao curta}}"]
+    end
+
+    %% -------------------------------------------------------
+    %% Sistemas Externos
+    %% -------------------------------------------------------
+    ExtA["📦 {{Sistema Externo 1}}<br/>{{funcao}}"]
+    ExtB["📦 {{Sistema Externo 2}}<br/>{{funcao}}"]
+
+    %% -------------------------------------------------------
+    %% Relacionamentos — Atores para Pontos de Entrada
+    %% Como cada ator acessa o sistema?
+    %% -------------------------------------------------------
+    User -->|"{{acao via HTTPS}}"| WebApp
+    User -->|"{{acao via HTTPS}}"| MobileApp
+    Admin -->|"{{acao via HTTPS}}"| WebApp
+
+    %% -------------------------------------------------------
+    %% Relacionamentos — Pontos de Entrada para Backend
+    %% Qual protocolo o frontend usa para falar com a API?
+    %% -------------------------------------------------------
+    WebApp -->|"{{HTTPS/REST ou GraphQL}}"| API
+    MobileApp -->|"{{HTTPS/REST ou GraphQL}}"| API
+
+    %% -------------------------------------------------------
+    %% Relacionamentos — Backend interno
+    %% Como a API se conecta ao banco, cache e fila?
+    %% -------------------------------------------------------
+    API -->|"{{protocolo, ex: TCP/SQL}}"| DB
+    API -->|"{{protocolo, ex: TCP}}"| Cache
+    API -->|"{{protocolo, ex: AMQP}}"| Queue
+    Queue -->|"{{consome mensagens}}"| Worker
+    Worker -->|"{{protocolo, ex: TCP/SQL}}"| DB
+
+    %% -------------------------------------------------------
+    %% Relacionamentos — Integracoes Externas
+    %% Quais containers se comunicam com sistemas externos?
+    %% -------------------------------------------------------
+    API -->|"{{protocolo, ex: HTTPS/REST}}"| ExtA
+    Worker -->|"{{protocolo, ex: HTTPS/REST}}"| ExtB
+
+    %% -------------------------------------------------------
+    %% Estilos C4
+    %% Azul = containers internos | Cinza = externo | Azul escuro = atores
+    %% -------------------------------------------------------
+    style SystemBoundary fill:none,stroke:#0b4884,stroke-width:2px,stroke-dasharray:5 5,color:#0b4884
+    style WebApp fill:#438dd5,stroke:#2e6295,color:#fff
+    style MobileApp fill:#438dd5,stroke:#2e6295,color:#fff
+    style API fill:#438dd5,stroke:#2e6295,color:#fff
+    style Worker fill:#438dd5,stroke:#2e6295,color:#fff
+    style DB fill:#438dd5,stroke:#2e6295,color:#fff
+    style Cache fill:#438dd5,stroke:#2e6295,color:#fff
+    style Queue fill:#438dd5,stroke:#2e6295,color:#fff
+    style User fill:#08427b,stroke:#052e56,color:#fff
+    style Admin fill:#08427b,stroke:#052e56,color:#fff
+    style ExtA fill:#999999,stroke:#6b6b6b,color:#fff
+    style ExtB fill:#999999,stroke:#6b6b6b,color:#fff

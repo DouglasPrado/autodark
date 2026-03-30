@@ -1,0 +1,61 @@
+%% ============================================================
+%% Modelo de Dados (ER)
+%% Referência: docs/05-data-model.md
+%% ============================================================
+%% GUIA: Represente as tabelas/collections do banco de dados com
+%% campos e relacionamentos. Substitua os {{placeholders}} pelos
+%% nomes reais das tabelas e colunas do seu projeto.
+%%
+%% Perguntas orientadoras:
+%% - Quais tabelas/collections o sistema precisa?
+%% - Quais são as chaves primárias e estrangeiras?
+%% - Quais índices são necessários para performance?
+%% - Qual a cardinalidade entre as tabelas?
+%% - Existem campos de auditoria (created_at, updated_at)?
+%% ============================================================
+
+erDiagram
+    {{tabela1}} {
+        uuid id PK "Identificador único"
+        string {{campo1_nome}} "{{descrição_campo1}}"
+        string {{campo1_email}} UK "{{descrição_campo_unique}}"
+        timestamp created_at "Data de criação"
+        timestamp updated_at "Data de atualização"
+    }
+
+    {{tabela2}} {
+        uuid id PK "Identificador único"
+        uuid {{fk_tabela1_id}} FK "Referência para {{tabela1}}"
+        string {{campo2_descricao}} "{{descrição_campo2}}"
+        decimal {{campo2_valor}} "{{descrição_valor}}"
+        string status "Status atual do registro"
+        timestamp created_at "Data de criação"
+        timestamp updated_at "Data de atualização"
+    }
+
+    {{tabela3}} {
+        uuid id PK "Identificador único"
+        uuid {{fk_tabela2_id}} FK "Referência para {{tabela2}}"
+        string {{campo3_tipo}} "{{descrição_tipo}}"
+        int {{campo3_quantidade}} "{{descrição_quantidade}}"
+        timestamp {{campo3_data}} "{{descrição_data}}"
+        timestamp created_at "Data de criação"
+    }
+
+    {{tabela4_configuracao}} {
+        uuid id PK "Identificador único"
+        string chave UK "Chave de configuração"
+        string valor "Valor da configuração"
+        boolean ativo "Registro ativo"
+        timestamp created_at "Data de criação"
+    }
+
+    %% --- Relacionamentos ---
+    %% {{tabela1}} possui muitos {{tabela2}}
+    {{tabela1}} ||--o{ {{tabela2}} : "{{descrição_rel_1_2}}"
+
+    %% {{tabela2}} possui muitos {{tabela3}} (obrigatório)
+    {{tabela2}} ||--|{ {{tabela3}} : "{{descrição_rel_2_3}}"
+
+    %% {{tabela1}} pode ter zero ou uma {{tabela4_configuracao}}
+    {{tabela1}} |o--o| {{tabela4_configuracao}} : "{{descrição_rel_1_4}}"

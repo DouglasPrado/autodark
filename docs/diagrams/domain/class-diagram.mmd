@@ -1,0 +1,59 @@
+%% ============================================================
+%% Modelo de Domínio
+%% Referência: docs/04-domain-model.md
+%% ============================================================
+%% GUIA: Represente as entidades principais do domínio com seus
+%% atributos e relacionamentos. Substitua os {{placeholders}}
+%% pelos nomes reais do seu projeto.
+%%
+%% Perguntas orientadoras:
+%% - Quais são as entidades centrais do domínio?
+%% - Quais atributos cada entidade possui?
+%% - Quais comportamentos (métodos) cada entidade expõe?
+%% - Como as entidades se relacionam entre si?
+%% - Existem hierarquias de herança no domínio?
+%% ============================================================
+
+classDiagram
+    direction TB
+
+    class {{Entidade1}} {
+        +String {{atributo1_id}}
+        +String {{atributo1_nome}}
+        +DateTime {{atributo1_criadoEm}}
+        +criar() {{Entidade1}}
+        +atualizar(dados) void
+    }
+
+    class {{Entidade2}} {
+        +String {{atributo2_id}}
+        +String {{atributo2_descricao}}
+        +Decimal {{atributo2_valor}}
+        +calcular() Decimal
+        +validar() Boolean
+    }
+
+    class {{Entidade3}} {
+        +String {{atributo3_id}}
+        +String {{atributo3_tipo}}
+        +registrar() void
+    }
+
+    class {{Entidade4_Base}} {
+        <<abstract>>
+        +String id
+        +DateTime criadoEm
+        +DateTime atualizadoEm
+        +auditar() void
+    }
+
+    %% --- Relacionamentos ---
+    %% Associação: {{Entidade1}} possui muitos {{Entidade2}}
+    {{Entidade1}} "1" --> "*" {{Entidade2}} : {{descrição_relação_1_2}}
+
+    %% Composição: {{Entidade2}} é composto por {{Entidade3}}
+    {{Entidade2}} "1" *-- "1..*" {{Entidade3}} : {{descrição_composição_2_3}}
+
+    %% Herança: {{Entidade1}} estende {{Entidade4_Base}}
+    {{Entidade4_Base}} <|-- {{Entidade1}} : estende
+    {{Entidade4_Base}} <|-- {{Entidade2}} : estende
