@@ -4,6 +4,7 @@ import { registerGenerateCommand } from './commands/generate.js'
 import { registerStatusCommand } from './commands/status.js'
 import { registerVideosCommand } from './commands/videos.js'
 import { registerConfigCommand } from './commands/config.js'
+import { registerStartCommand } from './commands/start.js'
 
 export function createProgram(): Command {
   const program = new Command()
@@ -17,6 +18,7 @@ export function createProgram(): Command {
   registerStatusCommand(program)
   registerVideosCommand(program)
   registerConfigCommand(program)
+  registerStartCommand(program)
 
   return program
 }

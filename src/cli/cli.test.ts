@@ -33,6 +33,13 @@ describe('CLI', () => {
     expect(cmd).toBeDefined()
   })
 
+  it('has start command', () => {
+    const program = createProgram()
+    const cmd = program.commands.find((c) => c.name() === 'start')
+    expect(cmd).toBeDefined()
+    expect(cmd!.description()).toContain('scheduler')
+  })
+
   it('generate command requires --niche option', () => {
     const program = createProgram()
     const cmd = program.commands.find((c) => c.name() === 'generate')!

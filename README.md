@@ -114,7 +114,18 @@ mestra videos --niche dark --limit 10
 ### Ver configuracao
 
 ```bash
-mestra config --list
+# Ver APIs configuradas
+mestra config
+
+# Validar se tudo esta OK
+mestra config --validate
+```
+
+### Iniciar scheduler (metricas + learning)
+
+```bash
+# Roda em foreground — coleta metricas a cada 6h e learning loop diario
+mestra start
 ```
 
 ## Desenvolvimento
