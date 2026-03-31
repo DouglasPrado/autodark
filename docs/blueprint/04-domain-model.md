@@ -48,7 +48,7 @@ O modelo de domínio representa as entidades centrais do sistema, suas responsab
 | niche | string | sim | Nicho do canal (ex: "dark", "curiosidades") |
 | contentPlan | ContentPlan | não | Plano de conteúdo da Strategy Engine |
 | strategyDirective | StrategyDirective | não | Diretiva atual para geração |
-| idea | string | não | Ideia de vídeo gerada |
+| idea | Idea | não | Ideia de vídeo gerada |
 | script | Script | não | Roteiro estruturado |
 | scenes | Scene[] | não | Lista de cenas segmentadas |
 | audioSegments | AudioSegment[] | não | Segmentos de áudio por cena |
@@ -60,7 +60,9 @@ O modelo de domínio representa as entidades centrais do sistema, suas responsab
 | metrics | VideoMetrics | não | Métricas de performance |
 | performanceScore | number | não | Score composto de performance |
 | learningState | LearningState | não | Estado atual do learning |
-| status | string | sim | Status do pipeline (pending, running, completed, failed) |
+| status | PipelineStatus | sim | Status do pipeline (pending, running, paused, completed, failed) |
+| errorMessage | string | não | Mensagem de erro se status=failed |
+| durationMs | number | não | Tempo total de execução em milissegundos |
 | createdAt | Date | sim | Timestamp de início |
 | updatedAt | Date | sim | Timestamp de última atualização |
 
@@ -249,21 +251,24 @@ O modelo de domínio representa as entidades centrais do sistema, suas responsab
 | Nome | Tipo | Obrigatório | Descrição |
 |------|------|:-----------:|-----------|
 | id | string | sim | UUID único |
-| videoId | string | sim | ID do vídeo no YouTube |
+| pipelineId | string | sim | Referência ao PipelineContext |
+| youtubeVideoId | string | sim | ID do vídeo no YouTube |
 | publishedAt | Date | sim | Data de publicação |
 | views | number | sim | Total de visualizações |
 | likes | number | sim | Total de likes |
 | comments | number | sim | Total de comentários |
-| retention | number | sim | Porcentagem de retenção média |
-| ctr | number | sim | Click-through rate (%) |
-| avgWatchTime | number | sim | Tempo médio de visualização (segundos) |
+| retention | number | não | Porcentagem de retenção média |
+| ctr | number | não | Click-through rate (%) |
+| avgWatchTime | number | não | Tempo médio de visualização (segundos) |
 | dropOffPoints | number[] | sim | Timestamps de abandono |
-| retentionCurve | object | não | Curva de retenção por segundo |
+| retentionCurve | RetentionCurve | não | Curva de retenção por segundo |
+| status | VideoMetricsStatus | sim | Status da coleta (pending, collected, failed) |
 | createdAt | Date | sim | Timestamp de coleta |
 
 **Regras de Negócio:**
 - Dados disponíveis apenas 48-72h após publicação
 - Retention curve é opcional (API pode não retornar)
+- retention, ctr, avgWatchTime são opcionais (podem não estar disponíveis na primeira coleta)
 
 ---
 
@@ -297,13 +302,15 @@ O modelo de domínio representa as entidades centrais do sistema, suas responsab
 |------|------|:-----------:|-----------|
 | id | string | sim | UUID único |
 | niche | string | sim | Nicho do canal |
-| hookWeights | object | sim | Pesos para tipos de hook |
-| templateWeights | object | sim | Pesos para segmentos de template |
-| pacingWeights | object | sim | Pesos para configurações de pacing |
-| contentWeights | object | sim | Pesos para topics/angles |
+| hookWeights | HookWeights | sim | Pesos para tipos de hook |
+| templateWeights | Record<string, number> | sim | Pesos para segmentos de template |
+| pacingWeights | Record<string, number> | sim | Pesos para configurações de pacing |
+| contentWeights | Record<string, number> | sim | Pesos para topics/angles |
 | isActive | boolean | sim | Se o learning está ativo |
+| status | LearningStatus | sim | Estado do learning (inactive, active, paused) |
 | lastUpdated | Date | sim | Timestamp de última atualização |
 | analyzedVideos | number | sim | Quantidade de vídeos analisados |
+| createdAt | Date | sim | Timestamp de criação |
 
 **Regras de Negócio:**
 - Cold start: usa valores padrão até analisar mínimo de 5 vídeos
