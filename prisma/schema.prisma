@@ -23,7 +23,7 @@ model Pipeline {
   performanceScore Float?
   learningState    String?
   errorMessage     String?
-  durationMs       Int?
+  durationMs       BigInt?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

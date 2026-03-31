@@ -26,6 +26,8 @@ export interface PipelineOrchestratorConfig {
 export interface PipelineOrchestrator {
   execute(params: { niche: string; idea?: string }): Promise<PipelineContext>
   resume(pipelineId: string): Promise<PipelineContext>
+  cancel(pipelineId: string): Promise<PipelineContext>
+  restart(pipelineId: string): Promise<PipelineContext>
 }
 
 export function createPipelineOrchestrator(config: PipelineOrchestratorConfig): PipelineOrchestrator {
@@ -124,6 +126,53 @@ export function createPipelineOrchestrator(config: PipelineOrchestratorConfig): 
 
       const remainingSteps = steps.slice(startIndex)
       return runSteps(running, remainingSteps)
+    },
+
+    async cancel(pipelineId) {
+      const existing = await repo.findById(pipelineId)
+      if (!existing) {
+        throw new PipelineError('PIPELINE_NOT_FOUND', `Pipeline ${pipelineId} não encontrado`)
+      }
+
+      if (existing.status !== PipelineStatus.FAILED && existing.status !== PipelineStatus.PAUSED && existing.status !== PipelineStatus.RUNNING) {
+        throw new PipelineError(
+          'INVALID_STATE_TRANSITION',
+          `Não é possível cancelar pipeline com status ${existing.status}`,
+        )
+      }
+
+      logger.info('Pipeline cancelado', { pipelineId })
+
+      const cancelled = nextContext(existing, {
+        status: PipelineStatus.FAILED,
+        errorMessage: 'Pipeline cancelado pelo operador',
+      })
+      await repo.update(cancelled.id, { status: cancelled.status, errorMessage: cancelled.errorMessage, updatedAt: cancelled.updatedAt })
+      return cancelled
+    },
+
+    async restart(pipelineId) {
+      const existing = await repo.findById(pipelineId)
+      if (!existing) {
+        throw new PipelineError('PIPELINE_NOT_FOUND', `Pipeline ${pipelineId} não encontrado`)
+      }
+
+      if (existing.status !== PipelineStatus.FAILED) {
+        throw new PipelineError(
+          'INVALID_STATE_TRANSITION',
+          `Não é possível reiniciar pipeline com status ${existing.status}`,
+        )
+      }
+
+      logger.info('Pipeline reiniciado', { pipelineId, niche: existing.niche })
+
+      // Create a fresh pipeline with same niche
+      const ctx = createContext({ niche: existing.niche })
+      const saved = await repo.save(ctx)
+      const running = nextContext(saved, { status: PipelineStatus.RUNNING })
+      await repo.update(running.id, { status: running.status, updatedAt: running.updatedAt })
+
+      return runSteps(running, steps)
     },
   }
 }
