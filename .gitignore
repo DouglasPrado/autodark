@@ -12,8 +12,8 @@ dist/
 *.db-journal
 prisma/migrations/
 
-# Storage (generated media)
-storage/
+# Storage (generated media at project root)
+/storage/
 
 # IDE
 .vscode/
