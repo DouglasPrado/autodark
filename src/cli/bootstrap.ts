@@ -9,8 +9,9 @@ import { createElevenLabsClient } from '../services/elevenlabs.js'
 import { createPexelsClient } from '../services/pexels.js'
 import { createFFmpegClient } from '../services/ffmpeg.js'
 import { createImageAIClient } from '../services/image-ai.js'
-import { createMockYouTubeClient } from '../services/youtube-upload.js'
+import { createYouTubeClient, createMockYouTubeClient } from '../services/youtube-upload.js'
 import { createMockYouTubeAnalyticsClient } from '../services/youtube-analytics.js'
+import type { YouTubeClient } from '../services/youtube-upload.js'
 import { createPipelineOrchestrator } from '../core/pipeline.js'
 import { createPipelineSteps, type PipelineClients } from '../services/pipeline-steps.js'
 import { createFileStorage } from '../infrastructure/storage/files.js'
@@ -21,6 +22,19 @@ export interface AppContext {
   logger: Logger
   orchestrator: PipelineOrchestrator
   disconnect(): Promise<void>
+}
+
+function buildYouTubeClient(config: any, logger: Logger): YouTubeClient {
+  if (config.youtubeClientId && config.youtubeClientSecret && config.youtubeRefreshToken) {
+    logger.info('YouTube OAuth2 configurado — usando client real')
+    return createYouTubeClient({
+      clientId: config.youtubeClientId,
+      clientSecret: config.youtubeClientSecret,
+      refreshToken: config.youtubeRefreshToken,
+    })
+  }
+  logger.warn('YouTube OAuth2 não configurado — usando mock (vídeos não serão publicados)')
+  return createMockYouTubeClient()
 }
 
 export async function bootstrap(): Promise<AppContext> {
@@ -41,11 +55,11 @@ export async function bootstrap(): Promise<AppContext> {
   // API Clients
   const clients: PipelineClients = {
     llm: createOpenRouterClient({ apiKey: config.openrouterApiKey }),
-    tts: createElevenLabsClient({ apiKey: config.elevenlabsApiKey }),
+    tts: createElevenLabsClient({ apiKey: config.elevenlabsApiKey, outputDir: `${config.storagePath}/audio` }),
     pexels: createPexelsClient({ apiKey: config.pexelsApiKey }),
     ffmpeg: createFFmpegClient(),
     imageAI: createImageAIClient({ apiKey: config.openrouterApiKey }),
-    youtube: createMockYouTubeClient(), // TODO: replace with real client when OAuth configured
+    youtube: buildYouTubeClient(config, logger),
   }
 
   // Pipeline

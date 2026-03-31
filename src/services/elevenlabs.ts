@@ -1,3 +1,6 @@
+import { writeFile, mkdir } from 'fs/promises'
+import { dirname } from 'path'
+
 export interface TTSResult {
   audioUrl: string
   duration: number
@@ -10,10 +13,12 @@ export interface TTSClient {
 export interface TTSClientConfig {
   apiKey: string
   model?: string
+  outputDir?: string
 }
 
 export function createElevenLabsClient(config: TTSClientConfig): TTSClient {
   const model = config.model ?? 'eleven_multilingual_v2'
+  const outputDir = config.outputDir ?? './storage/audio'
 
   return {
     async generateVoice(text: string, voiceId: string): Promise<TTSResult> {
@@ -24,10 +29,15 @@ export function createElevenLabsClient(config: TTSClientConfig): TTSClient {
           headers: {
             'xi-api-key': config.apiKey,
             'Content-Type': 'application/json',
+            'Accept': 'audio/mpeg',
           },
           body: JSON.stringify({
             text,
             model_id: model,
+            voice_settings: {
+              stability: 0.5,
+              similarity_boost: 0.75,
+            },
           }),
         },
       )
@@ -36,11 +46,21 @@ export function createElevenLabsClient(config: TTSClientConfig): TTSClient {
         throw new Error(`ElevenLabs error: ${response.status} ${response.statusText}`)
       }
 
-      const audioUrl = `elevenlabs://${voiceId}/${Date.now()}.mp3`
-      const wordCount = text.split(/\s+/).length
-      const duration = wordCount / 2.5
+      // Save audio to disk
+      const buffer = Buffer.from(await response.arrayBuffer())
+      const filename = `${Date.now()}-${voiceId}.mp3`
+      const audioPath = `${outputDir}/${filename}`
 
-      return { audioUrl, duration }
+      await mkdir(dirname(audioPath), { recursive: true })
+      await writeFile(audioPath, buffer)
+
+      // Estimate duration from audio size (MP3 ~16kB/s at 128kbps)
+      const estimatedDuration = buffer.length / 16000
+      // Better estimate from word count as fallback
+      const wordDuration = text.split(/\s+/).length / 2.5
+      const duration = estimatedDuration > 0.5 ? estimatedDuration : wordDuration
+
+      return { audioUrl: audioPath, duration: Math.round(duration * 100) / 100 }
     },
   }
 }

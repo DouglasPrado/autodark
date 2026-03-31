@@ -1,3 +1,5 @@
+import { google } from 'googleapis'
+import { createReadStream } from 'fs'
 import type { VideoMetadata } from '../contracts/index.js'
 
 export interface YouTubeUploadResult {
@@ -15,15 +17,46 @@ export interface YouTubeClientConfig {
   refreshToken: string
 }
 
-export function createYouTubeClient(_config: YouTubeClientConfig): YouTubeClient {
+export function createYouTubeClient(config: YouTubeClientConfig): YouTubeClient {
+  const oauth2 = new google.auth.OAuth2(config.clientId, config.clientSecret)
+  oauth2.setCredentials({ refresh_token: config.refreshToken })
+
+  const youtube = google.youtube({ version: 'v3', auth: oauth2 })
+
   return {
     async uploadVideo(videoPath, metadata) {
-      // In production: OAuth2 → YouTube Data API v3 videos.insert
-      throw new Error('YouTube upload requires OAuth2 configuration — use mock for tests')
+      const response = await youtube.videos.insert({
+        part: ['snippet', 'status'],
+        requestBody: {
+          snippet: {
+            title: metadata.title,
+            description: metadata.description,
+            tags: metadata.tags,
+            categoryId: '22', // People & Blogs
+          },
+          status: {
+            privacyStatus: 'public',
+            selfDeclaredMadeForKids: false,
+          },
+        },
+        media: {
+          body: createReadStream(videoPath),
+        },
+      })
+
+      const videoId = response.data.id
+      if (!videoId) throw new Error('YouTube upload retornou sem videoId')
+
+      return { videoId }
     },
+
     async setThumbnail(videoId, thumbnailPath) {
-      // In production: YouTube Data API v3 thumbnails.set
-      throw new Error('YouTube thumbnail requires OAuth2 configuration — use mock for tests')
+      await youtube.thumbnails.set({
+        videoId,
+        media: {
+          body: createReadStream(thumbnailPath),
+        },
+      })
     },
   }
 }
