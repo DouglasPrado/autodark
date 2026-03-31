@@ -85,7 +85,11 @@ export function createPipelineOrchestrator(config: PipelineOrchestratorConfig): 
       const ctx = createContext({ niche: params.niche })
       logger.info('Pipeline iniciado', { pipelineId: ctx.id, niche: ctx.niche })
 
-      const saved = await repo.save(ctx)
+      const withIdea = params.idea
+        ? nextContext(ctx, { manualIdea: params.idea } as any)
+        : ctx
+
+      const saved = await repo.save(withIdea)
       const running = nextContext(saved, { status: PipelineStatus.RUNNING })
       await repo.update(running.id, { status: running.status, updatedAt: running.updatedAt })
 
